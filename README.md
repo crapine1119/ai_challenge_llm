@@ -88,7 +88,7 @@ Design LLM service for HR Manager
   > Service2: 조회 도메인을 활용해서 생성된 기업 정보, JD에 대한 카탈로그 제공 \
   > Service3: JD 생성/수정 \
   > Service4: 현재 LLM사용량 등 자원에 대한 정보를 제공 \
-  > (Optional) Service4: 유사한 JD 포스팅
+  > (Optional) Service4: 유사한 JD 포스팅 / 그냥 중간 생성물들을 생성한 것처럼 실시간으로 보여주는건 어떨까?
 
 * 제약
   - 기업에 대한 문서가 항상 있을까...? 단순 소개만 있고 기술같은건 없을 확률이 높은데, 어디서 정보를 가져오지?
@@ -117,3 +117,35 @@ Design LLM service for HR Manager
   - 프론트엔드개발자: 1000230
   - 마케팅기획: 1000187
   - 재무담당자: 1000210
+
+* db 정보
+  [코드 맵핑]
+  - 인사담당자: 1000201
+  - AI/ML엔지니어: 1000242
+  - 백엔드개발자: 1000229
+  - 프론트엔드개발자: 1000230
+  - 마케팅기획: 1000187
+  - 재무담당자: 1000210
+
+  [과거 데이터 및 크롤링 | 잡코리아 API를 모방하기 위한 DB]
+  - 회사코드 | 직무코드 | JD1 | 날짜 | 분석 및 생성한 데이터 (json string)
+  - 회사코드 | 직무코드 | JD2 | 날짜 | 분석 및 생성한 데이터 (json string)
+  
+  [생성: 기본 기술들 (주기적 업데이트)]
+  - 직무코드 | 생성한 데이터
+
+  [스타일: 프롬프트를 나중에 추가해줄 것]
+  - 정형적 (사전에 지정한 스타일로) 
+  - notion 스타일 (또는 트랜디하게)
+  - 기술 상세히
+  - 사용자 커스텀
+
+  [생성: 사전 생성한 템플릿 (주기적 업데이트)]
+  - 회사코드 | 직무코드 | 스타일 | 생성한 JD1 
+  - 회사코드 | 직무코드 | 스타일 | 생성한 JD2
+
+* 테스트
+  > curl http://localhost:8000/healthz \
+  > curl -X POST "http://localhost:8000/collect/jobkorea" \
+  > -H "Content-Type: application/json" \
+  > -d '{"company_id":1517115,"company_code":"jobkorea","job_code": "1000230", "max_details": 5}'

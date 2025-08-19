@@ -1,0 +1,20 @@
+# pyproject.toml
+[project]
+name = "jd-generator"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "asyncpg>=0.30.0",
+    "beautifulsoup4>=4.13.4",
+    "black>=25.1.0",
+    "fastapi>=0.116.1",
+    "greenlet>=3.2.4",
+    "psycopg[binary]>=3.2.9",
+    "pydantic>=2.11.7",
+    "requests>=2.32.5",
+    "sqlalchemy>=2.0.43",
+    "tqdm>=4.67.1",
+    "uvicorn[standard]>=0.35.0",
+]
+
+[tool.uv]
