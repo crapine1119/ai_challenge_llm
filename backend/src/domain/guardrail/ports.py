@@ -1,0 +1,6 @@
+from typing import Protocol
+
+class InputGuardPort(Protocol):
+    async def assess(self, text: str) -> "Decision": ...
+class OutputGuardPort(Protocol):
+    async def assess(self, text: str) -> "Decision": ...

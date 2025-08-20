@@ -1,4 +1,5 @@
 import logging
+import sys
 
 from fastapi import FastAPI
 
@@ -7,6 +8,9 @@ from api.routes.collect import router as collect_router
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
+    handlers=[
+        logging.StreamHandler(sys.stdout),
+    ],
 )
 
 app = FastAPI()

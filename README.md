@@ -144,8 +144,62 @@ Design LLM service for HR Manager
   - 회사코드 | 직무코드 | 스타일 | 생성한 JD1 
   - 회사코드 | 직무코드 | 스타일 | 생성한 JD2
 
+backend/
+└── src/
+    ├── api/
+    │   └── routes/
+    │       └── llm_queue.py              # GET /llm/queue/status, GET /llm/queue/me, (선택) WS 구독
+    ├── schema/
+    │   └── llm_queue_schema.py           # 요청 파라미터(tenant/user 키), 응답 DTO(동시수/앞사람/ETA/슬라이스통계)
+    ├── domain/
+    │   └── llm_queue/
+    │       ├── entities.py               # UserKey, QueueSnapshot, ConcurrencyCap, ETAEstimate 등 도메인 객체
+    │       ├── policies.py               # 공정성/가중치(Weighted Fair Queue), per-user concurrency cap, SLO 정책
+    │       ├── ports.py                  # QueueRepo, MetricsRepo, LockPort, ClockPort, NotifierPort 등 포트 인터페이스
+    │       └── errors.py                 # AdmissionDenied, OverCapacity, EstimationUnavailable 등
+    ├── service/
+    │   └── llm_queue/
+    │       ├── status_service.py         # (읽기) 현재 동시 처리 수, 내 앞 대기열, ETA 계산 오케스트레이션
+    │       ├── scheduling_service.py     # (쓰기) 요청 접수/승인/대기/취소/완료 관리(Admission Control)
+    │       ├── eta_estimator.py          # 평균/EMA/백분위 기반 ETA 추정, per-user & 글로벌 혼합
+    │       └── observers.py              # 완료 시 메트릭 업데이트, 구독자 알림(웹소켓/서버센트 이벤트 훅)
+    ├── infrastructure/
+    │   ├── queue/
+    │   │   ├── redis_queue_repo.py       # QueueRepo 구현: 대기열(리스트/정렬셋), 진행중 카운터(원자증감)
+    │   │   ├── memory_queue_repo.py      # 로컬 개발/테스트용 인메모리 구현
+    │   │   └── fair_scheduler.py         # WFQ/토큰버킷/라운드로빈 등 스케줄러 구현(도메인 정책 위임)
+    │   ├── locks/
+    │   │   └── redlock.py                # 분산 잠금(요청 승인/완료 원자성 보장)
+    │   ├── metrics/
+    │   │   ├── latency_store.py          # 이동창/EMA/백분위 히스토리 저장(Redis TS or 리스트)
+    │   │   └── exporters.py              # Prometheus/Otel 내보내기(게이지: in_progress; 히스토그램: latency)
+    │   ├── middleware/
+    │   │   └── llm_runtime_tracking.py   # API/서비스 경로에서 user_key 태깅, 요청 수명주기 훅(before/after)
+    │   ├── config/
+    │   │   └── llm_queue_config.py       # 기본 동시성 한도, 큐 정책, ETA윈도우, 타임아웃 등 설정 로더
+    │   └── notifier/
+    │       └── ws_notifier.py            # (선택) 사용자별 상태 변경 시 푸시(WS/SSE), NotifierPort 구현
+    └── tests/
+        └── llm_queue/
+            ├── test_eta_estimator.md     # 시나리오/수학적 기대치 문서(코드 없이 개념 검증)
+            └── test_topology_notes.md    # 단일 인스턴스 vs 멀티 인스턴스 동기화 시나리오 메모
+
+
+
+
 * 테스트
   > curl http://localhost:8000/healthz \
   > curl -X POST "http://localhost:8000/collect/jobkorea" \
   > -H "Content-Type: application/json" \
   > -d '{"company_id":1517115,"company_code":"jobkorea","job_code": "1000230", "max_details": 5}'
+
+---
+이제 해야되는 일
+[] llm 호출 코드
+[] company analysis (정보 없이 job만 가지고도 생성하는게 가능해야함)
+[] jd generation (사전 템플릿을 지정해놓을 것)
+[] 간단한 프론트
+
+기타
+[] egg-info 지우기
+[] generated_skills db는 삭제

@@ -6,7 +6,7 @@ from typing import Optional, Dict, List, Tuple
 from domain.job_entities import JobListItem, JobDetail
 from infrastructure.crawler import JobKoreaCrawler  # 기존 크롤러 파일 경로 예시
 from infrastructure.db.database import get_session
-from infrastructure.db.repositories import GeneratedInsightRepository, RawJDRepository
+from infrastructure.db.repository import GeneratedInsightRepository, RawJDRepository
 from infrastructure.http_client import HttpClient
 
 SOURCE = "jobkorea"

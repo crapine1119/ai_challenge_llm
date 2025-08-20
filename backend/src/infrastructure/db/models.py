@@ -1,3 +1,4 @@
+from sqlalchemy import Boolean
 from sqlalchemy import Column, Integer, String, Text, Date, ForeignKey, JSON, TIMESTAMP, text, UniqueConstraint
 from sqlalchemy.orm import relationship
 
@@ -45,3 +46,33 @@ class GeneratedInsight(Base):
 
     job = relationship("JobCode")
     raw = relationship("RawJobDescription")
+
+
+class Prompt(Base):
+    __tablename__ = "prompts"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    prompt_key = Column(Text, nullable=False)
+    prompt_version = Column(Text, nullable=False)
+    language = Column(Text, nullable=True)
+    prompt_type = Column(Text, nullable=False)  # 'chat' | 'string'
+    messages = Column(JSON, nullable=True)  # list[{"role","content"}]
+    template = Column(Text, nullable=True)  # string 템플릿
+    params = Column(JSON, nullable=False, server_default=text("'{}'::jsonb"))
+    json_schema_key = Column(Text, nullable=True)
+    required_vars = Column(JSON, nullable=False, server_default=text("'[]'::jsonb"))
+    is_active = Column(Boolean, nullable=False, server_default=text("TRUE"))
+    created_at = Column(TIMESTAMP(timezone=True), server_default=text("NOW()"))
+    updated_at = Column(TIMESTAMP(timezone=True), server_default=text("NOW()"))
+
+    __table_args__ = (
+        UniqueConstraint("prompt_key", "prompt_version", text("COALESCE(language, '')"), name="uq_prompt_key_ver_lang"),
+    )
+
+
+class JDStyle(Base):
+    __tablename__ = "jd_styles"
+    style_id = Column(Integer, primary_key=True, autoincrement=True)
+    style_name = Column(Text, unique=True, nullable=False)
+    prompt_key = Column(Text)
+    prompt_version = Column(Text)
+    is_active = Column(Boolean, server_default=text("TRUE"))
