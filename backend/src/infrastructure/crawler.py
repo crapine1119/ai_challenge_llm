@@ -275,16 +275,21 @@ class JobKoreaCrawler:
         prev_items = self.parse_list_items(BeautifulSoup(self.http.get(prev_list_url).text, "html.parser"))
 
         parsed_items = curr_items + prev_items
-        logging.info(f"Items for {company_id} are parsed ({len(parsed_items)})")
+        if parsed_items:
+            logging.info(f"Items for {company_id} are parsed ({len(parsed_items)})")
 
-        results: List[Tuple[JobListItem, Optional[JobDetail]]] = []
-        for it in tqdm(parsed_items[:max_details], postfix="Crawling..."):
-            try:
-                detail = self.parse_detail(it.href)
-            except Exception:
-                detail = None
-            results.append((it, detail))
-        return results
+            results: List[Tuple[JobListItem, Optional[JobDetail]]] = []
+            for it in tqdm(parsed_items[:max_details], postfix="Crawling..."):
+                try:
+                    detail = self.parse_detail(it.href)
+                except Exception:
+                    detail = None
+                results.append((it, detail))
+            return results
+        else:
+            logging.warning(
+                f"It is Possible that connection for url ({curr_list_url}) is blocked.\nPlease Check connection with the browser."
+            )
 
 
 # if __name__ == "__main__":

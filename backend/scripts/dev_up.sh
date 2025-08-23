@@ -7,6 +7,7 @@
 #   ./scripts/dev_up.sh restart
 #   ./scripts/dev_up.sh init-db       # ✅ Postgres named volume 삭제 후 재생성(완전 초기화)
 #   ./scripts/dev_up.sh seed-db       # 기존 DB에 ./postgres/init/*.sql 적용
+#   ./scripts/dev_up.sh sync-prompts  # ✅ src/prompts → DB 동기화 (수동 실행)
 #   ./scripts/dev_up.sh stop
 #   ./scripts/dev_up.sh status
 #   ./scripts/dev_up.sh logs
@@ -29,6 +30,11 @@ service_name="${COMPOSE_SERVICE_POSTGRES:-postgres}"
 PROJECT_NAME="${COMPOSE_PROJECT_NAME:-$(basename "$ROOT_DIR")}"
 POSTGRES_VOLUME_NAME_DEFAULT="${PROJECT_NAME}_jd_postgres_data"
 POSTGRES_VOLUME_NAME="${POSTGRES_VOLUME_NAME:-$POSTGRES_VOLUME_NAME_DEFAULT}"
+
+# 프롬프트 동기화 제어
+AUTO_SYNC_PROMPTS="${AUTO_SYNC_PROMPTS:-1}"     # 1/true/yes/on → 자동 동기화
+PROMPT_ROOT="${PROMPT_ROOT:-src/prompts}"       # YAML 루트
+PROMPT_LANG="${PROMPT_LANG:-}"                  # 특정 언어만 (예: ko). 비어있으면 전체
 
 # ===== 공통 유틸 =====
 log() { printf '%s %s\n' "[$(date '+%Y-%m-%d %H:%M:%S')]" "$*"; }
@@ -78,8 +84,8 @@ ensure_uv_env() {
     log "📦 .venv 없으므로 uv venv 생성"
     uv venv
   fi
-  log "📥 의존성 설치 (pyproject.toml)"
-  uv pip install .
+  log "🔄 의존성 동기화 (uv sync)"
+  uv sync
 }
 
 is_running() {
@@ -90,6 +96,38 @@ is_running() {
     fi
   fi
   return 1
+}
+
+# ===== Prompt Sync =====
+sync_prompts() {
+  log "🧩 YAML 프롬프트 DB 동기화 시작"
+  local -a args
+  args=(--root "$PROMPT_ROOT")
+  if [ -n "$PROMPT_LANG" ]; then
+    args+=(--lang "$PROMPT_LANG")
+  fi
+  # PYTHONPATH=src 로 모듈 경로 보장
+  if PYTHONPATH=src uv run python -m infrastructure.prompt.sync "${args[@]}"; then
+    log "✅ 프롬프트 동기화 완료"
+  else
+    log "⚠️ 프롬프트 동기화 실패 (앱은 계속 기동할 수 있음)"
+    return 1
+  fi
+}
+
+maybe_auto_sync_prompts() {
+  # macOS bash 3.2 호환: 소문자 변환을 tr로 처리
+  local flag="${AUTO_SYNC_PROMPTS:-1}"
+  flag="$(printf '%s' "$flag" | tr '[:upper:]' '[:lower:]')"
+
+  case "$flag" in
+    1|true|yes|on)
+      sync_prompts || true
+      ;;
+    *)
+      log "ℹ️ AUTO_SYNC_PROMPTS 비활성화 → 프롬프트 동기화 생략"
+      ;;
+  esac
 }
 
 start_app() {
@@ -162,6 +200,7 @@ init_db() {
   reset_db_volume
   compose_up_db
   wait_for_db
+  maybe_auto_sync_prompts
   log "✅ DB 완전 초기화 완료 (.env 반영 + /docker-entrypoint-initdb.d/*.sql 실행)"
 }
 
@@ -191,6 +230,8 @@ seed_db() {
     done
   '
   log "✅ DB 시드 적용 완료"
+  ensure_uv_env
+  maybe_auto_sync_prompts
 }
 
 tail_logs() {
@@ -205,16 +246,24 @@ ensure_prereq
 
 cmd="${1:-start}"
 case "$cmd" in
+  debug)
+    compose_up_db
+    wait_for_db
+    ensure_uv_env
+    maybe_auto_sync_prompts
+    ;;
   start)
     compose_up_db
     wait_for_db
     ensure_uv_env
+    maybe_auto_sync_prompts   # ✅ 앱 시작 전 자동 동기화
     start_app
     ;;
   restart)
     compose_up_db
     wait_for_db
     ensure_uv_env
+    maybe_auto_sync_prompts   # ✅ 재시작 전 자동 동기화
     restart_app
     ;;
   init-db)
@@ -222,6 +271,12 @@ case "$cmd" in
     ;;
   seed-db)
     seed_db
+    ;;
+  sync-prompts)               # ✅ 수동 동기화
+    compose_up_db
+    wait_for_db
+    ensure_uv_env
+    sync_prompts
     ;;
   stop)
     stop_app
@@ -233,7 +288,7 @@ case "$cmd" in
     tail_logs
     ;;
   *)
-    echo "사용법: $0 [start|restart|init-db|seed-db|stop|status|logs]"
+    echo "사용법: $0 [start|restart|init-db|seed-db|sync-prompts|stop|status|logs]"
     exit 1
     ;;
 esac

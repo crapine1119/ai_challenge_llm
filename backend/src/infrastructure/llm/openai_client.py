@@ -1,17 +1,21 @@
+import json
+import logging
 import os
+import re
 from typing import Any, AsyncIterator, Dict, Optional, Union, List
 
-from openai import AsyncOpenAI  # pip install openai
+from openai import AsyncOpenAI
 
 from infrastructure.llm.interface import LLMClient, JsonObj
 
-DEFAULT_TEXT_MODEL = os.getenv("OPENAI_TEXT_MODEL", "o3-mini")
+DEFAULT_TEXT_MODEL = os.getenv("OPENAI_TEXT_MODEL", "gpt-4.1-mini")
+_CODE_BLOCK = re.compile(r"```(?:json)?\s*(.+?)```", flags=re.DOTALL)
 
 
-def _client() -> AsyncOpenAI:
+def _build_client(api_key: Optional[str], base_url: Optional[str]) -> AsyncOpenAI:
     return AsyncOpenAI(
-        api_key=os.getenv("OPENAI_API_KEY"),
-        base_url=os.getenv("OPENAI_BASE_URL") or None,
+        api_key=api_key or os.getenv("OPENAI_API_KEY"),
+        base_url=(base_url or os.getenv("OPENAI_BASE_URL") or None),
     )
 
 
@@ -23,15 +27,105 @@ def _messages(prompt: str, system: Optional[str]) -> List[Dict[str, Any]]:
     return msgs
 
 
+def _normalize_chat_params(opts: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    if not opts:
+        return {}
+    out: Dict[str, Any] = {}
+    passthrough = [
+        "temperature",
+        "top_p",
+        "presence_penalty",
+        "frequency_penalty",
+        "stop",
+        "max_tokens",
+        "seed",
+        "logit_bias",
+        "metadata",
+        "tools",
+        "tool_choice",
+        "extra_body",
+    ]
+    for k in passthrough:
+        if k in opts:
+            out[k] = opts[k]
+    return out
+
+
+def _extract_json_from_braces(s: str) -> Optional[Dict[str, Any]]:
+    starts: List[int] = [i for i, ch in enumerate(s) if ch in "{["]
+    for start in starts:
+        stack: List[str] = []
+        in_str = False
+        esc = False
+        for i in range(start, len(s)):
+            ch = s[i]
+            if in_str:
+                if esc:
+                    esc = False
+                elif ch == "\\":
+                    esc = True
+                elif ch == '"':
+                    in_str = False
+                continue
+            else:
+                if ch == '"':
+                    in_str = True
+                    continue
+                if ch in "{[":
+                    stack.append(ch)
+                elif ch in "}]":
+                    if not stack:
+                        break
+                    top = stack.pop()
+                    if (top == "{" and ch != "}") or (top == "[" and ch != "]"):
+                        break
+                    if not stack:
+                        cand = s[start : i + 1].strip()
+                        try:
+                            obj = json.loads(cand)
+                            return obj if isinstance(obj, dict) else {"_list": obj}
+                        except Exception:
+                            break
+    return None
+
+
+def _extract_json_from_text(text: str) -> Dict[str, Any]:
+    if not text:
+        return {}
+    try:
+        return json.loads(text)
+    except Exception:
+        pass
+    m = _CODE_BLOCK.search(text)
+    if m:
+        cand = m.group(1).strip()
+        try:
+            return json.loads(cand)
+        except Exception:
+            parsed = _extract_json_from_braces(cand)
+            if parsed is not None:
+                return parsed
+    parsed = _extract_json_from_braces(text)
+    return parsed or {}
+
+
 class OpenAIAsyncLLM(LLMClient):
     """
-    - invoke: 텍스트 또는 구조화(JSON Schema) 출력
-    - stream: 텍스트 스트리밍
+    Chat Completions 기반(OpenAI/Gemini 호환)
+    - provider 힌트로 JSON 강제 전략을 분기
     """
 
-    def __init__(self, *, text_model: Optional[str] = None):
+    def __init__(
+        self,
+        *,
+        text_model: Optional[str] = None,
+        api_key: Optional[str] = None,
+        base_url: Optional[str] = None,
+        provider: Optional[str] = None,  # ✅ 추가
+    ):
         self.text_model = text_model or DEFAULT_TEXT_MODEL
-        self._cli = _client()
+        self._cli = _build_client(api_key, base_url)
+        self.provider = (provider or "openai").lower()
 
     async def invoke(
         self,
@@ -40,45 +134,42 @@ class OpenAIAsyncLLM(LLMClient):
         system: Optional[str] = None,
         model: Optional[str] = None,
         json_schema: Optional[JsonObj] = None,
-        strict: bool = True,
+        strict: bool = True,  # 호환성 유지
+        **options: Any,
     ) -> Union[str, JsonObj]:
         model_name = model or self.text_model
+        want_json = bool(options.pop("json_format", False))  # ✅ API 인자 처리
+
+        # 메시지 구성 (+ Gemini에서 JSON 강제 시 시스템 규칙 주입)
+        sys_text = system or None
+        if json_schema and want_json and self.provider == "gemini":
+            rule = "반드시 하나의 유효한 JSON 객체만 출력하고, 그 외 텍스트는 절대 포함하지 마세요."
+            sys_text = (system + "\n\n" + rule) if system else rule
 
         kwargs: Dict[str, Any] = {
             "model": model_name,
-            "input": _messages(prompt, system),
+            "messages": _messages(prompt, sys_text),
         }
+        kwargs.update(_normalize_chat_params(options))
 
-        # 구조화 출력 (JSON Schema)
+        # OpenAI에서만 공식 JSON 강제 파라미터 사용 (호환성)
+        if json_schema and want_json and self.provider == "openai":
+            kwargs["response_format"] = {"type": "json_object"}
+
+        resp = await self._cli.chat.completions.create(**kwargs)
+
+        text = ""
+        if resp and getattr(resp, "choices", None):
+            msg = getattr(resp.choices[0], "message", None)
+            if msg and getattr(msg, "content", None):
+                text = msg.content or ""
+
+        logging.info(f"[LLM Response]\n{text}")
+
         if json_schema:
-            kwargs["response_format"] = {
-                "type": "json_schema",
-                "json_schema": {
-                    "name": json_schema.get("title", "schema"),
-                    "schema": json_schema,
-                    "strict": strict,
-                },
-            }
+            return _extract_json_from_text(text)
 
-        resp = await self._cli.responses.create(**kwargs)
-
-        # JSON 요청일 경우
-        if json_schema:
-            for chunk in resp.output or []:
-                if chunk.type == "message":
-                    for part in chunk.content:
-                        if part.type == "output_json":
-                            return part.parsed  # dict
-            return {}  # 파싱 실패 시 빈 객체
-
-        # 텍스트 요청일 경우
-        out: List[str] = []
-        for chunk in resp.output or []:
-            if chunk.type == "message":
-                for part in chunk.content:
-                    if part.type == "output_text":
-                        out.append(part.text or "")
-        return "".join(out).strip()
+        return (text or "").strip()
 
     async def stream(
         self,
@@ -88,13 +179,17 @@ class OpenAIAsyncLLM(LLMClient):
         model: Optional[str] = None,
     ) -> AsyncIterator[str]:
         model_name = model or self.text_model
-
-        async with self._cli.responses.stream(
-            model=model_name,
-            input=_messages(prompt, system),
-        ) as stream:
-            async for event in stream:
-                # 텍스트 델타만 전송
-                if getattr(event, "type", "") == "response.output_text.delta":
-                    yield event.delta or ""
-            # 필요하면 최종 응답: final = await stream.get_final_response()
+        kwargs: Dict[str, Any] = {
+            "model": model_name,
+            "messages": _messages(prompt, system),
+            "stream": True,
+        }
+        stream = await self._cli.chat.completions.create(**kwargs)
+        async for chunk in stream:
+            try:
+                delta = chunk.choices[0].delta
+                piece = getattr(delta, "content", None)
+                if piece:
+                    yield piece
+            except Exception:
+                continue

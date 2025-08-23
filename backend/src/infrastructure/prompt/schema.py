@@ -1,16 +1,9 @@
+# src/infrastructure/prompt/schema.py
+from __future__ import annotations
+
 from typing import Any, Dict, List, Optional, Literal
 
-from pydantic import BaseModel
-
-# Pydantic v2 / v1 호환 extra 처리
-try:
-    from pydantic import ConfigDict, model_validator
-
-    _V2 = True
-except Exception:  # v1
-    from pydantic import root_validator as model_validator  # type: ignore
-
-    _V2 = False
+from pydantic import BaseModel, ConfigDict, model_validator
 
 
 class PromptFile(BaseModel):
@@ -21,12 +14,7 @@ class PromptFile(BaseModel):
     - string: template = "...{{ var }}..."
     """
 
-    if _V2:
-        model_config = ConfigDict(extra="forbid")
-    else:
-
-        class Config:
-            extra = "forbid"
+    model_config = ConfigDict(extra="forbid")
 
     key: str
     version: str
@@ -45,22 +33,25 @@ class PromptFile(BaseModel):
     json_schema_key: Optional[str] = None
     required_vars: Optional[List[str]] = None
 
-    if _V2:
+    @model_validator(mode="after")  # pydantic v2
+    def _fill_defaults(self):
+        if self.params is None:
+            self.params = {}
+        if self.required_vars is None:
+            self.required_vars = []
+        return self
 
-        @model_validator(mode="after")  # pydantic v2
-        def _fill_defaults(self):
-            if self.params is None:
-                self.params = {}
-            if self.required_vars is None:
-                self.required_vars = []
-            return self
 
-    else:
+class PromptTemplateInput(BaseModel):
+    """
+    서비스 레이어에서 PromptManager.render_chat(...) 호출 시 사용하는 입력 모델.
+    - style_name이 주어지면 스타일 매핑을 우선 적용하고, 없으면 (prompt_key, prompt_version)을 직접 사용.
+    - variables에는 템플릿에서 참조하는 모든 변수를 넣는다.
+    """
 
-        @model_validator(pre=False)  # pydantic v1
-        def _fill_defaults(cls, values):  # type: ignore
-            if values.get("params") is None:
-                values["params"] = {}
-            if values.get("required_vars") is None:
-                values["required_vars"] = []
-            return values
+    model_config = ConfigDict(extra="forbid")
+    prompt_key: str
+    prompt_version: str
+    language: Optional[str] = None
+    style_name: Optional[str] = None
+    variables: Dict[str, Any] = {}

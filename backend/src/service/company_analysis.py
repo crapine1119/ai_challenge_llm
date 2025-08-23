@@ -3,13 +3,22 @@ from typing import Optional, Dict, Any, List
 
 from domain.company_analysis.models import CompanyKnowledge, CompanyJDStyle
 from infrastructure.db.database import get_session
-from infrastructure.db.repository import GeneratedInsightRepository
+from infrastructure.db.repository import (
+    GeneratedInsightRepository,
+    StyleSnapshotRepository,
+    build_style_digest_markdown,
+)
 from infrastructure.db.repository import RawJDRepository
-from infrastructure.llm.json_schemas import COMPANY_KNOWLEDGE_JSON_SCHEMA, COMPANY_JD_STYLE_JSON_SCHEMA
+from infrastructure.llm.json_schemas import (
+    COMPANY_KNOWLEDGE_JSON_SCHEMA,
+    COMPANY_JD_STYLE_JSON_SCHEMA,
+)
 from infrastructure.llm.openai_client import OpenAIAsyncLLM
 from infrastructure.prompt.manager import render_by_style, render_by_key_version
 
 logger = logging.getLogger(__name__)
+
+GLOBAL_COMPANY = "__global__"  # ✅ Zero-shot 용 글로벌 company code
 
 JOB_CODE_NAME = {
     "1000201": "인사담당자",
@@ -20,10 +29,109 @@ JOB_CODE_NAME = {
     "1000210": "재무담당자",
 }
 
-DEFAULT_EXTRACT_KEY = "company.analysis.knowledge"
+DEFAULT_EXTRACT_KEY = "company.analysis.job_competency_few_shot"
 DEFAULT_ZERO_SHOT_KEY = "company.analysis.job_competency_zero_shot"
 DEFAULT_STYLE_KEY = "company.analysis.jd_style"
 DEFAULT_VERSION = "v1"
+
+
+def _prune_to_schema(data: Any, schema: Dict[str, Any]) -> Any:
+    """
+    LLM 응답(data)을 JSON Schema(schema)에 맞춰 재귀적으로 가지치기.
+
+    - object:
+        * properties에 정의된 키는 해당 서브스키마로 prune
+        * additionalProperties:
+            - False (또는 미지정) → 미정의 키 제거
+            - True → 미정의 키도 그대로 허용
+            - dict(스키마) → 미정의 키의 값을 그 스키마로 재귀 prune
+    - array : items 스키마 기준으로 각 요소를 prune
+    - primitive: 그대로 유지
+    - anyOf/oneOf: 첫 유효 스키마 또는 첫 항목 적용, allOf: 순차 적용
+    - type이 ["string","null"] 같은 리스트일 때: data 타입에 맞는 것을 우선 선택
+    """
+    if schema is None:
+        return data
+
+    # 조합 스키마
+    for comb in ("allOf", "oneOf", "anyOf"):
+        subs = schema.get(comb)
+        if isinstance(subs, list) and subs:
+            if comb == "allOf":
+                out = data
+                for sub in subs:
+                    out = _prune_to_schema(out, sub)
+                return out
+            # oneOf/anyOf: 가장 먼저 매칭되는 것을 사용 (간단화)
+            return _prune_to_schema(data, subs[0])
+
+    # type이 리스트면 data 타입에 가장 어울리는 것을 고르기
+    stype = schema.get("type")
+    if isinstance(stype, list):
+        # 간단 매칭
+        py2js = {
+            dict: "object",
+            list: "array",
+            str: "string",
+            bool: "boolean",
+            int: "number",
+            float: "number",
+            type(None): "null",
+        }
+        want = py2js.get(type(data))
+        if want in stype:
+            stype = want
+        else:
+            stype = stype[0]  # fallback
+    # 이하 stype은 문자열 또는 None
+
+    # object
+    if stype == "object" and isinstance(data, dict):
+        props = schema.get("properties") or {}
+        addl = schema.get("additionalProperties", False)  # 기본 False 취급
+        out: Dict[str, Any] = {}
+
+        # 1) 정의된 키 먼저 처리
+        for k, sub in props.items():
+            if k in data:
+                out[k] = _prune_to_schema(data[k], sub)
+
+        # 2) 미정의 키 처리: additionalProperties 정책 반영
+        for k, v in data.items():
+            if k in props:
+                continue
+            if addl is True:
+                # 전부 허용
+                out[k] = v
+            elif isinstance(addl, dict):
+                # 스키마로 재귀 prune (맵 타입 지원)
+                out[k] = _prune_to_schema(v, addl)
+            else:
+                # False 또는 기타 → drop
+                pass
+
+        return out
+
+        # object인데 data가 dict가 아니면 그대로 반환(혹은 {}로 강제하고 싶으면 그 정책 적용)
+    # array
+    if stype == "array" and isinstance(data, list):
+        item_schema = schema.get("items")
+        if item_schema:
+            return [_prune_to_schema(x, item_schema) for x in data]
+        return data
+
+    # primitive/unknown → 그대로
+    return data
+
+
+def _prompt_meta_from_rendered(rendered: Dict[str, Any]) -> Dict[str, Any]:
+    """render_by_* 결과에서 prompt 메타 추출 (DB 추적용)."""
+    return {
+        "id": rendered.get("prompt_id"),
+        "key": rendered.get("key"),
+        "version": rendered.get("version"),
+        "language": rendered.get("language"),
+    }
 
 
 class CompanyAnalysisService:
@@ -38,25 +146,40 @@ class CompanyAnalysisService:
         self.llm = llm or OpenAIAsyncLLM()
 
     # ---------- Public APIs ----------
+    async def extract_knowledge_zero_shot(
+        self,
+        *,
+        job_code: str,
+        language: Optional[str] = "ko",
+        save: bool = True,
+        json_format: bool = True,
+    ) -> CompanyKnowledge:
+        """등록된 JD 없이 직무만으로 제로샷 지식 생성"""
+        job_name = JOB_CODE_NAME.get(job_code, job_code)
+        rendered = await self._render_zero_shot(GLOBAL_COMPANY, job_name, language)
 
-    async def extract_knowledge(
+        logger.info("\tZero-shot knowledge: begin")
+        result = await self._invoke_json(rendered, json_schema=COMPANY_KNOWLEDGE_JSON_SCHEMA, json_format=json_format)
+        model = CompanyKnowledge.model_validate(result)
+        if save:
+            await self._save_company_knowledge(GLOBAL_COMPANY, job_code, model, rendered=rendered)
+        logger.info("\tZero-shot knowledge: done")
+        return model
+
+    async def extract_knowledge_few_shot(
         self,
         *,
         company_code: str,
         job_code: str,
-        style_name: Optional[str] = None,
         language: Optional[str] = "ko",
-        top_k: int = 30,
-        within_days: Optional[int] = 365,
+        top_k: int = 3,
+        within_days: Optional[int] = None,
         min_chars_per_doc: int = 200,
         save: bool = True,
+        json_format: bool = True,
     ) -> CompanyKnowledge:
-        """
-        JD가 있으면: 추출 프롬프트 → LLM(JSON)
-        JD가 없으면: 제로샷 프롬프트 → LLM(JSON)
-        """
+        """회사×직무의 최신 JD 샘플을 이용한 지식 생성 (문서 없으면 에러)"""
         job_name = JOB_CODE_NAME.get(job_code, job_code)
-
         jd_samples = await self._load_recent_jds(
             company_code=company_code,
             job_code=job_code,
@@ -64,21 +187,15 @@ class CompanyAnalysisService:
             within_days=within_days,
             min_chars=min_chars_per_doc,
         )
-        has_docs = len(jd_samples) > 0
-
-        if has_docs:
-            rendered = await self._render_extract(company_code, job_name, jd_samples, style_name, language)
-            json_schema = COMPANY_KNOWLEDGE_JSON_SCHEMA
-        else:
-            rendered = await self._render_zero_shot(company_code, job_name, language)
-            json_schema = COMPANY_KNOWLEDGE_JSON_SCHEMA
-
-        result = await self._invoke_json(rendered, json_schema)
+        if not jd_samples:
+            raise ValueError("Few-shot을 위한 JD 샘플이 없습니다. 먼저 크롤링 또는 기간/조건을 확인하세요.")
+        rendered = await self._render_extract(company_code, job_name, jd_samples, None, language)
+        logger.info("\tFew-shot knowledge: begin")
+        result = await self._invoke_json(rendered, json_schema=COMPANY_KNOWLEDGE_JSON_SCHEMA, json_format=json_format)
         model = CompanyKnowledge.model_validate(result)
-
         if save:
-            await self._save_company_knowledge(company_code, job_code, model)
-
+            await self._save_company_knowledge(company_code, job_code, model, rendered=rendered)
+        logger.info("\tFew-shot knowledge: done")
         return model
 
     async def extract_company_jd_style(
@@ -87,13 +204,16 @@ class CompanyAnalysisService:
         company_code: str,
         job_code: str,
         language: Optional[str] = "ko",
-        top_k: int = 20,
-        within_days: Optional[int] = 365,
+        top_k: int = 3,
+        within_days: Optional[int] = None,
         min_chars_per_doc: int = 200,
         save: bool = True,
+        json_format: bool = False,
+        provider: Optional[str] = None,
+        model_name: Optional[str] = None,
     ) -> CompanyJDStyle:
         """
-        회사 JD 스타일(톤/섹션/예시 템플릿) 추출
+        회사 JD 스타일(톤/섹션/템플릿) 추출 → generated_styles 스냅샷 저장
         """
         job_name = JOB_CODE_NAME.get(job_code, job_code)
         jd_samples = await self._load_recent_jds(
@@ -106,9 +226,7 @@ class CompanyAnalysisService:
 
         concatenated = self._concat(jd_samples)
         if not concatenated:
-            # 문서가 없으면 스타일은 제로샷으로 구성하기 어렵지만,
-            # 최소한 직무의 일반적 섹션으로 예시를 생성하도록 빈 문자열 전달
-            logger.info("No JD docs for style; proceeding with empty concatenation.")
+            logger.warning("No JD docs for style; proceeding with empty concatenation.")
 
         rendered = await render_by_key_version(
             key=DEFAULT_STYLE_KEY,
@@ -120,38 +238,53 @@ class CompanyAnalysisService:
                 "concatenated_jds": concatenated or "자료 없음: 일반적 JD 스타일을 생성해라.",
             },
         )
-        result = await self._invoke_json(rendered, COMPANY_JD_STYLE_JSON_SCHEMA)
+
+        logger.info("\tStyle extraction: begin")
+        result = await self._invoke_json(rendered, json_schema=COMPANY_JD_STYLE_JSON_SCHEMA, json_format=json_format)
         model = CompanyJDStyle.model_validate(result)
 
         if save:
-            await self._save_company_style(company_code, job_code, model)
-
+            prompt_meta = _prompt_meta_from_rendered(rendered)
+            await self._save_company_style(
+                company_code=company_code,
+                job_code=job_code,
+                model=model,
+                provider=provider,
+                model_name=model_name,
+                prompt_meta=prompt_meta,
+            )
+        logger.info("\tStyle extraction: done")
         return model
 
-    async def analyze_company_jd(
+        # ---------- Public: Analyze (few-shot + style) ----------
+
+    async def analyze_all(
         self,
         *,
         company_code: str,
         job_code: str,
-        style_name: Optional[str] = None,
         language: Optional[str] = "ko",
         save: bool = True,
+        json_format: bool = False,
     ) -> Dict[str, Any]:
         """
-        원샷 분석: 지식/역량 + 스타일을 한 번에 수행
+        한 번에 실행:
+          1) Few-shot Knowledge (회사×직무 JD 기반)
+          2) Style (회사×직무)
         """
-        knowledge = await self.extract_knowledge(
+        knowledge = await self.extract_knowledge_few_shot(
             company_code=company_code,
             job_code=job_code,
-            style_name=style_name,
             language=language,
             save=save,
+            json_format=json_format,
         )
         style = await self.extract_company_jd_style(
             company_code=company_code,
             job_code=job_code,
             language=language,
             save=save,
+            json_format=json_format,
         )
         return {
             "company_code": company_code,
@@ -222,39 +355,98 @@ class CompanyAnalysisService:
         )
         return rendered
 
-    async def _invoke_json(self, rendered: Dict[str, Any], json_schema: Dict[str, Any]) -> Dict[str, Any]:
+    async def _invoke_json(
+        self,
+        rendered: Dict[str, Any],
+        json_schema: Optional[Dict[str, Any]] = None,
+        *,
+        json_format: bool = False,
+    ) -> Dict[str, Any]:
         system = rendered.get("system")
         user_text = rendered["user_text"]
         params = rendered.get("params") or {}
-        result = await self.llm.invoke(prompt=user_text, system=system, json_schema=json_schema, **params)
+
+        # 프롬프트가 준 key로 스키마 해석(명시 인자 우선)
+        from infrastructure.llm.json_schemas import resolve_json_schema
+
+        schema = json_schema or resolve_json_schema(rendered.get("json_schema_key"))
+        if not schema:
+            raise ValueError(f"JSON schema not resolved (key={rendered.get('json_schema_key')})")
+
+        result = await self.llm.invoke(
+            prompt=user_text,
+            system=system,
+            json_schema=schema,
+            json_format=json_format,  # OpenAI: response_format, Gemini: 프롬프트 강제 + 파싱
+            **params,
+        )
         assert isinstance(result, dict), "LLM must return JSON for structured prompt"
-        return result
 
-    def _concat(self, docs: List[str], max_chars: int = 18000) -> str:
+        # ✅ 여기서 반드시 스키마 프루닝
+        pruned = _prune_to_schema(result, schema)
+
+        # pruned가 dict가 아니면 빈 dict로 폴백 (Pydantic이 기본값 넣을 수 있게)
+        return pruned if isinstance(pruned, dict) else {}
+
+    def _concat(self, docs: List[str], max_docs: int = 5, max_chars: int = 18000) -> str:
         # 과도한 토큰 폭주 방지: 단순 앞에서 자르기
-        joined = "\n\n---\n\n".join(docs)
-        return joined[:max_chars]
+        joined = "\n\n---\n\n".join(docs[:max_docs])
+        if len(joined) > max_chars:
+            joined = f"{joined[:max_chars]}..."
 
-    async def _save_company_knowledge(self, company_code: str, job_code: str, model: CompanyKnowledge) -> int:
+        return joined
+
+    async def _save_company_knowledge(
+        self,
+        company_code: str,
+        job_code: str,
+        model: CompanyKnowledge,
+        rendered: Dict[str, Any],
+    ) -> int:
         async for session in get_session():
             repo = GeneratedInsightRepository(session)
             insight_id = await repo.add_company_knowledge(
                 company_code=company_code,
                 job_code=job_code,
                 payload_json=model.model_dump(),
+                prompt_id=rendered.get("prompt_id"),
+                prompt_key=rendered.get("key"),
+                prompt_version=rendered.get("version"),
+                prompt_language=rendered.get("language"),
             )
             return insight_id
         return -1
 
-    async def _save_company_style(self, company_code: str, job_code: str, model: CompanyJDStyle) -> int:
+    async def _save_company_style(
+        self,
+        company_code: str,
+        job_code: str,
+        model: CompanyJDStyle,
+        *,
+        provider: Optional[str] = None,
+        model_name: Optional[str] = None,
+        prompt_meta: Optional[Dict[str, Any]] = None,
+    ) -> int:
+        """
+        스타일은 generated_styles 스냅샷으로 저장.
+        """
         async for session in get_session():
-            repo = GeneratedInsightRepository(session)
-            insight_id = await repo.add_company_style(
+            repo = StyleSnapshotRepository(session)
+            digest = build_style_digest_markdown(
+                model.model_dump(),
                 company_code=company_code,
                 job_code=job_code,
-                payload_json=model.model_dump(),
             )
-            return insight_id
+            style_id = await repo.add_style_snapshot(
+                company_code=company_code,
+                job_code=job_code,
+                payload=model.model_dump(),
+                digest_md=digest,
+                prompt_meta=prompt_meta or {},
+                provider=provider,
+                model=model_name,
+            )
+            return style_id
         return -1
 
 

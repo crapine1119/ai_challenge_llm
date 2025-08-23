@@ -125,6 +125,7 @@ async def crawl_jobkorea_and_store(
 
                 url = _derive_url(item, detail)
                 title = _derive_title(item, detail)
+                meta_payload = _build_basic_meta(item, detail) if save_meta else None
 
                 jd_id = await raw_repo.upsert_by_job_id(
                     source=SOURCE,
@@ -135,17 +136,11 @@ async def crawl_jobkorea_and_store(
                     title=title,
                     jd_text=jd_text,
                     end_date=_derive_end_date(detail),
+                    meta_json=meta_payload,  # ✅ 메타를 raw에 저장
                 )
-                saved_raw += 1
 
-                if save_meta:
-                    meta_payload = _build_basic_meta(item, detail)
-                    await insight_repo.add_analysis(
-                        jd_id=jd_id,
-                        company_code=company_code,
-                        job_code=job_code,
-                        analysis_json=meta_payload,
-                    )
+                saved_raw += 1
+                if meta_payload:
                     saved_meta_cnt += 1
 
             except Exception as e:

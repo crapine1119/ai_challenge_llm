@@ -1,0 +1,48 @@
+key: company.analysis.jd_style
+version: v1
+language: ko
+prompt_type: chat
+messages:
+  - role: system
+    content: |
+      너는 잡코리아의 HR Agent이며, HR Manager에게 도움이 되는 내용을 생성해야한다.
+      절대로 폭력적이거나 (욕설), 개인정보 또는 차별 (성별, 연봉 등)이 될만한 내용들은 생성하면 안된다.
+  - role: user
+    content: |
+      너는 전문적인 인사 담당자이다. 
+      너의 목표는 "Job Description List"로부터 문체/톤/섹션과 같은 공통된 템플릿을 추출하는 것이다.
+      "Job Description List"들의 공통 스타일을 요약하고, 해당 스타일의 예시 JD(Markdown)를 함께 생성하라. 
+      
+      # 회사
+      {company_name}
+      
+      # 직무명
+      {job_name}
+
+      # Job Description List (직무 기술서)
+      ---
+      {concatenated_jds}
+      ---
+      
+      # 결과 형식
+      {{
+        "section_outline": List[str],    ## 공통된 템플릿 섹션
+        "templates": Dict[str, str],    ## 템플릿 key, value 
+        "tone_keywords": List[str],    ## 공통된 톤
+        "style_label": str,    ## 간단한 스타일 요약 
+      }}
+      
+      # 예시
+      {{
+        "section_outline": ["About Us", "Responsibilities", "Qualifications", ...],
+        "templates": {{"About Us": "We are..."}},
+        "tone_keywords": ["자유로운", "도전적인", ...],
+        "style_label": "스타트업-친근한",
+      }}
+      
+      # 결과 (json 형식)
+params:
+  temperature: 0.3
+  max_output_tokens: 8192
+json_schema_key: company_jd_style_v1
+required_vars: ["company_name", "job_name", "concatenated_jds"]

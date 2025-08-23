@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException
 
-from api.schemas.collect_schema import CollectRequest, CollectResponse
+from api.schemas.collect import CollectRequest, CollectResponse
 from service.collector import crawl_jobkorea_and_store
 
 router = APIRouter(prefix="/collect", tags=["collector"])
