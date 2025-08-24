@@ -12,7 +12,7 @@ class LLMClient(Protocol):
         model: Optional[str] = None,
         json_schema: Optional[JsonObj] = None,
         strict: bool = True,
-        **options: Any,  # ✅ 프롬프트 params 전달 허용
+        **params: Any,
     ) -> Union[str, JsonObj]:
         """
         단발 호출.
@@ -27,6 +27,7 @@ class LLMClient(Protocol):
         prompt: str,
         system: Optional[str] = None,
         model: Optional[str] = None,
+        **params: Any,
     ) -> AsyncIterator[str]:
         """
         토큰 스트리밍. 텍스트 델타를 차례로 yield.

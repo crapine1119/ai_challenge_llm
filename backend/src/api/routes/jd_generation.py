@@ -1,12 +1,21 @@
+import json
 import logging
-from typing import Optional
+from typing import Optional, AsyncIterator
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.deps import db_session
 from api.schemas.jd_generation import JDGenerateRequest, JDGenerateResponse, JDGetResponse, JDListResponse, JDItem
 from domain.company_analysis.models import CompanyKnowledge, CompanyJDStyle
+from infrastructure.db.repository import (
+    JDRepository,
+    StyleSnapshotRepository,
+    DefaultStyleRepository,
+    GeneratedInsightRepository,
+    load_job_name,
+)
 from infrastructure.llm.factory import make_llm
 from infrastructure.prompt.manager import PromptManager
 from service.jd_generation import JDGenerationService
@@ -20,15 +29,6 @@ def _title_from_markdown(md: str, fallback: str) -> str:
         t = first.lstrip("#").strip()
         return t or fallback
     return fallback
-
-
-from infrastructure.db.repository import (
-    JDRepository,
-    StyleSnapshotRepository,
-    DefaultStyleRepository,
-    GeneratedInsightRepository,
-    load_job_name,
-)
 
 
 async def _resolve_style_meta_for_saving(
@@ -153,6 +153,135 @@ async def generate_jd(
         job_code=job_label,
         markdown=markdown,
         saved_id=saved_id,
+    )
+
+
+# ✅ 신규: 스트리밍 생성(SSE)
+@router.post("/generate/stream")
+async def generate_jd_stream(
+    body: JDGenerateRequest,
+    session: AsyncSession = Depends(db_session),
+):
+    """
+    Server-Sent Events 로 JD 생성 텍스트 조각(delta)을 실시간 전송.
+    - event: "start"  → 요청 메타
+    - event: "delta"  → 본문 조각
+    - event: "end"    → 저장 결과(saved_id, title)
+    - event: "error"  → 오류 메시지
+    """
+
+    # 1) LLM / PM / Service
+    llm = make_llm(provider=body.provider, model=body.model)
+    pm = PromptManager()
+    svc = JDGenerationService(llm=llm, prompt_manager=pm)
+
+    # 2) Knowledge 준비
+    if body.knowledge_override is not None:
+        try:
+            knowledge = CompanyKnowledge.model_validate(body.knowledge_override)
+        except Exception as e:
+            raise HTTPException(status_code=422, detail=f"Invalid knowledge_override: {e}")
+    else:
+        kn_repo = GeneratedInsightRepository(session)
+        kn_payload = await kn_repo.latest_payload(company_code=body.company_code, job_code=body.job_code)
+        if not kn_payload:
+            raise HTTPException(status_code=404, detail="No saved knowledge for given company_code/job_code")
+        try:
+            knowledge = CompanyKnowledge.model_validate(kn_payload)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Saved knowledge payload invalid: {e}")
+
+    # 3) Style (override 있으면 그대로, 없으면 서비스에서 해석)
+    style: Optional[CompanyJDStyle] = None
+    if body.style_override is not None:
+        try:
+            style = CompanyJDStyle.model_validate(body.style_override)
+        except Exception as e:
+            raise HTTPException(status_code=422, detail=f"Invalid style_override: {e}")
+
+    # 4) 라벨
+    company_label = body.company_code
+    job_label = (await load_job_name(session, body.job_code)) or body.job_code
+
+    # 5) 저장 시 사용할 스타일 메타 미리 결정(오류 나더라도 스트림은 계속)
+    try:
+        style_meta = await _resolve_style_meta_for_saving(
+            session,
+            style_override=body.style_override,
+            style_source_req=body.style_source,
+            default_style_name=body.default_style_name,
+            company_code=body.company_code,
+            job_code=body.job_code,
+        )
+    except Exception:
+        style_meta = {"style_source": None, "style_preset_name": None, "style_snapshot_id": None}
+
+    async def sse_gen() -> AsyncIterator[bytes]:
+        # start 이벤트
+        start_payload = {
+            "event": "start",
+            "company_code": company_label,
+            "job_code": job_label,
+            "provider": body.provider,
+            "model": body.model,
+            "style_source": style_meta.get("style_source"),
+            "style_preset_name": style_meta.get("style_preset_name"),
+            "style_snapshot_id": style_meta.get("style_snapshot_id"),
+        }
+        yield f"event: start\ndata: {json.dumps(start_payload, ensure_ascii=False)}\n\n".encode("utf-8")
+
+        buffer = []
+        saved_id = None
+        try:
+            # LLM 스트림 시작
+            async for piece in svc.generate_jd_markdown_stream(
+                company=company_label,
+                job=job_label,
+                job_code=body.job_code,
+                knowledge=knowledge,
+                jd_style=style,
+                style_source=body.style_source,
+                default_style_name=body.default_style_name,
+                model=body.model,
+                language=body.language,
+            ):
+                buffer.append(piece)
+                yield f"event: delta\ndata: {json.dumps({'text': piece}, ensure_ascii=False)}\n\n".encode("utf-8")
+
+            # 전송 완료 → 저장
+            markdown = "".join(buffer).strip()
+            title = _title_from_markdown(markdown, fallback=f"{company_label} {job_label}")
+
+            repo = JDRepository(session)
+            saved_id = await repo.save_generated(
+                company_code=company_label,
+                job_code=body.job_code,
+                title=title,
+                markdown=markdown,
+                sections=None,
+                meta={},  # 필요 시 확장
+                provider=(body.provider or None),
+                model_name=(body.model or None),
+                prompt_meta={"key": "jd.generation", "version": "v1", "language": body.language},
+                style_source=style_meta.get("style_source", None),
+                style_preset_name=style_meta.get("style_preset_name", None),
+                style_snapshot_id=style_meta.get("style_snapshot_id", None),
+            )
+
+            end_payload = {"event": "end", "saved_id": saved_id, "title": title}
+            yield f"event: end\ndata: {json.dumps(end_payload, ensure_ascii=False)}\n\n".encode("utf-8")
+
+        except Exception as e:
+            err = {"event": "error", "message": str(e)}
+            yield f"event: error\ndata: {json.dumps(err, ensure_ascii=False)}\n\n".encode("utf-8")
+
+    return StreamingResponse(
+        sse_gen(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+        },
     )
 
 

@@ -1,6 +1,9 @@
 # ai_challenge_llm
 Design LLM service for HR Manager
 
+본 프로젝트는 korcen (Apache-2.0)을 포함하고 있으며, 패키징 이슈로 경로만 일부 수정하여 사용합니다.
+
+
 ### Promblem Definition
 
 * in/out

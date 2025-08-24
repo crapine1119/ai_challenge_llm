@@ -1,25 +1,68 @@
 import asyncio
+import json
 import logging
 import time
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional, List, Literal
+from typing import Any, Dict, Set
+from typing import Optional, List, Literal
 
 import httpx
-from fastapi import APIRouter, Depends, Request, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi.responses import JSONResponse, StreamingResponse
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.schemas.jd_generation import JDGenerateResponse
-from api.schemas.llm_queue_schema import (
-    SimThenGenerateRequest,
-    TaskStatusResponse,
-    SimThenGenerateAsyncAccepted,
-    SimThenGenerateAnyResponse,
+from api.schemas.jd_generation import JDGenerateResponse, JDGenerateRequest
+from api.schemas.llm_queue_schema import SimThenGenerateRequest, SimThenGenerateAnyResponse
+from api.schemas.llm_queue_schema import TaskStatusResponse, SimThenGenerateAsyncAccepted
+from domain.company_analysis.models import CompanyKnowledge, CompanyJDStyle
+from infrastructure.db.database import get_session
+from infrastructure.db.repository import (
+    JDRepository,
+    StyleSnapshotRepository,
+    DefaultStyleRepository,
+    GeneratedInsightRepository,
+    load_job_name,
 )
+from infrastructure.llm.factory import make_llm
+from infrastructure.prompt.manager import PromptManager
+from service.jd_generation import JDGenerationService
 from service.llm_queue import LLMQueueService
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/llm/queue", tags=["llm-queue"])
 DEFAULT_USER_ID = "demo-user"
+
+
+def _title_from_markdown(md: str, fallback: str) -> str:
+    first = (md or "").splitlines()[0].strip()
+    if first.startswith("#"):
+        t = first.lstrip("#").strip()
+        return t or fallback
+    return fallback
+
+
+async def _resolve_style_meta_for_saving(
+    session: AsyncSession,
+    *,
+    style_override: Optional[CompanyJDStyle],
+    style_source_req: str,
+    default_style_name: Optional[str],
+    company_code: str,
+    job_code: str,
+) -> dict:
+    if style_override is not None:
+        return {"style_source": "override", "style_preset_name": None, "style_snapshot_id": None}
+    if style_source_req == "generated":
+        snap = await StyleSnapshotRepository(session).latest_for(company_code=company_code, job_code=job_code)
+        return {
+            "style_source": "generated",
+            "style_preset_name": None,
+            "style_snapshot_id": (snap.id if snap else None),
+        }
+    name = default_style_name or "일반적"
+    _ = await DefaultStyleRepository(session).get_preset(style_name=name)
+    return {"style_source": "default", "style_preset_name": name, "style_snapshot_id": None}
 
 
 # 아주 단순한 메모리 태스크 저장소
@@ -50,7 +93,39 @@ class TaskStore:
             self.data[tid].update(kwargs)
 
 
+class EventHub:
+    """task_id별로 SSE 구독 큐를 관리하고 이벤트를 브로드캐스트"""
+
+    def __init__(self):
+        self._subs: Dict[str, Set[asyncio.Queue]] = {}
+
+    def subscribe(self, task_id: str) -> asyncio.Queue:
+        q: asyncio.Queue = asyncio.Queue(maxsize=1000)
+        self._subs.setdefault(task_id, set()).add(q)
+        return q
+
+    def unsubscribe(self, task_id: str, q: asyncio.Queue) -> None:
+        try:
+            self._subs.get(task_id, set()).discard(q)
+        except Exception:
+            pass
+
+    async def publish(self, task_id: str, event_type: str, data: dict) -> None:
+        payload = {"type": event_type, "data": data, "ts": time.time()}
+        for q in list(self._subs.get(task_id, set())):
+            try:
+                q.put_nowait(payload)
+            except asyncio.QueueFull:
+                # 구독자 측이 느린 경우 드롭
+                pass
+
+
+def sse_bytes(event_type: str, data: dict) -> bytes:
+    return f"event: {event_type}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n".encode("utf-8")
+
+
 TASKS = TaskStore()
+EVENT_HUB = EventHub()
 
 
 # ---- 기존 시뮬 레Runtime(가짜 대기 처리) 재사용 ----
@@ -301,8 +376,8 @@ async def sim_then_generate(
                 raise HTTPException(status_code=resp.status_code, detail=resp.text)
             return resp.json()
 
-        # === async 모드 ===
-        # 즉시 task_id 반환하고, 백그라운드에서 수행
+    # === async 모드 ===
+    # 즉시 task_id 반환하고, 백그라운드에서 수행
     task_id = TASKS.create(user_id=user_id, req_json=req.jd.model_dump(exclude_none=True))
 
     async def _bg_work():
@@ -368,6 +443,187 @@ async def sim_then_generate(
             "status": f"/api/llm/queue/tasks/{task_id}/status",
             "result": f"/api/llm/queue/tasks/{task_id}/result",
         },
+    )
+
+
+@router.post(
+    "/sim-then-generate/stream",
+    response_model=SimThenGenerateAnyResponse,
+    response_model_exclude_none=True,
+    status_code=202,  # ✅ 즉시 202
+)
+async def sim_then_generate_stream(
+    req: SimThenGenerateRequest,
+    request: Request,
+    rt: SimQueueRuntime = Depends(get_runtime),
+    callback_url: Optional[str] = Query(None),
+) -> SimThenGenerateAnyResponse:
+    """
+    ✅ 완전 비동기 모드 고정:
+      - prequeue 시뮬레이션 작업을 쌓고,
+      - 즉시 202 + task_id 반환
+      - 백그라운드에서 대기/생성/저장을 수행하고 이벤트는 SSE로 송출
+    """
+    user_id = req.user_id or DEFAULT_USER_ID
+
+    # 1) 가짜 대기열 enqueue
+    ids: List[str] = []
+    for _ in range(req.prequeue_count):
+        payload = {
+            "simulate_only": True,
+            "sim_fixed_sec": req.sim.fixed_sec,
+            "sim_min_sec": req.sim.min_sec,
+            "sim_max_sec": req.sim.max_sec,
+        }
+        rid, _pos = await rt.queue.enqueue(user_id, payload)
+        ids.append(rid)
+
+    # 2) task 생성 (메모리 레지스트리)
+    task_id = TASKS.create(user_id=user_id, req_json=req.jd.model_dump(exclude_none=True))
+
+    # 3) 백그라운드 작업 시작
+    async def _bg_work():
+        try:
+            TASKS.update(task_id, status="waiting", meta={"pre_total": len(ids), "pre_done": 0})
+            # 시뮬 대기 진행도 주기적으로 publish
+            terminal = {"finished", "failed", "canceled", "expired"}
+            total = len(ids)
+            while True:
+                done = 0
+                for rid in ids:
+                    it = await rt.queue.engine.status(rid)
+                    if (not it) or (it.status.value in terminal):
+                        done += 1
+                TASKS.update(task_id, meta={"pre_total": total, "pre_done": done})
+                await EVENT_HUB.publish(task_id, "queue", {"total": total, "done": done})
+                if done >= total:
+                    break
+                await asyncio.sleep(0.7)
+
+            # === 실제 생성 단계 ===
+            TASKS.update(task_id, status="generating")
+            await EVENT_HUB.publish(
+                task_id, "start", {"company_code": req.jd.company_code, "job_code": req.jd.job_code}
+            )
+
+            # 내부 생성 로직(스트리밍)
+            body: JDGenerateRequest = req.jd
+            # DB 세션이 필요한 로직은 독립 세션 사용
+            async for session in get_session():
+                # Knowledge: override > DB
+                if body.knowledge_override is not None:
+                    knowledge = CompanyKnowledge.model_validate(body.knowledge_override)
+                else:
+                    kn_repo = GeneratedInsightRepository(session)
+                    kn_payload = await kn_repo.latest_payload(company_code=body.company_code, job_code=body.job_code)
+                    if not kn_payload:
+                        raise RuntimeError("No saved knowledge for given company_code/job_code")
+                    knowledge = CompanyKnowledge.model_validate(kn_payload)
+
+                # Style: override or policy
+                style: Optional[CompanyJDStyle] = None
+                if body.style_override is not None:
+                    style = CompanyJDStyle.model_validate(body.style_override)
+
+                # 표시 라벨
+                company_label = body.company_code
+                job_label = (await load_job_name(session, body.job_code)) or body.job_code
+
+                # 저장용 스타일 메타
+                style_meta = await _resolve_style_meta_for_saving(
+                    session,
+                    style_override=body.style_override,
+                    style_source_req=body.style_source,
+                    default_style_name=body.default_style_name,
+                    company_code=body.company_code,
+                    job_code=body.job_code,
+                )
+
+                # LLM 스트리밍
+                llm = make_llm(provider=body.provider, model=body.model)
+                pm = PromptManager()
+                svc = JDGenerationService(llm=llm, prompt_manager=pm)
+
+                buf: List[str] = []
+                try:
+                    async for piece in svc.generate_jd_markdown_stream(
+                        company=company_label,
+                        job=job_label,
+                        job_code=body.job_code,
+                        knowledge=knowledge,
+                        jd_style=style,
+                        style_source=body.style_source,
+                        default_style_name=body.default_style_name,
+                        model=body.model,
+                        language=body.language,
+                    ):
+                        buf.append(piece)
+                        await EVENT_HUB.publish(task_id, "delta", {"text": piece})
+                except Exception as e:
+                    TASKS.update(task_id, status="failed", finished_at=time.time(), error=str(e))
+                    await EVENT_HUB.publish(task_id, "error", {"message": str(e)})
+                    return
+
+                md = "".join(buf).strip()
+                title = _title_from_markdown(md, fallback=f"{company_label} {job_label}")
+
+                # 저장
+                repo = JDRepository(session)
+                saved_id = await repo.save_generated(
+                    company_code=company_label,
+                    job_code=body.job_code,
+                    title=title,
+                    markdown=md,
+                    sections=None,
+                    meta={},  # 필요 시 확장
+                    provider=(body.provider or None),
+                    model_name=(body.model or None),
+                    prompt_meta={"key": "jd.generation", "version": "v1", "language": body.language},
+                    style_source=style_meta.get("style_source", None),
+                    style_preset_name=style_meta.get("style_preset_name", None),
+                    style_snapshot_id=style_meta.get("style_snapshot_id", None),
+                )
+
+                result_payload = {
+                    "company_code": company_label,
+                    "job_code": job_label,
+                    "saved_id": saved_id,
+                    "title": title,
+                }
+                TASKS.update(
+                    task_id, status="finished", finished_at=time.time(), saved_id=saved_id, result=result_payload
+                )
+                await EVENT_HUB.publish(task_id, "end", result_payload)
+
+                # 웹훅(선택)
+                if callback_url:
+                    try:
+                        async with httpx.AsyncClient(timeout=10.0) as client:
+                            await client.post(
+                                callback_url,
+                                json={"task_id": task_id, "status": "finished", **result_payload},
+                            )
+                    except Exception:
+                        pass
+
+        except Exception as e:
+            TASKS.update(task_id, status="failed", finished_at=time.time(), error=str(e))
+            await EVENT_HUB.publish(task_id, "error", {"message": str(e)})
+
+    asyncio.create_task(_bg_work())
+
+    # 즉시 202 + task_id / 링크 반환
+    return JSONResponse(
+        status_code=202,
+        content=SimThenGenerateAsyncAccepted(
+            task_id=task_id,
+            status="accepted",
+            links={
+                "status": f"/api/llm/queue/tasks/{task_id}/status",
+                "result": f"/api/llm/queue/tasks/{task_id}/result",
+                "events": f"/api/llm/queue/tasks/{task_id}/events",
+            },
+        ).model_dump(exclude_none=True),
     )
 
 
@@ -444,6 +700,26 @@ async def task_status(task_id: str, rt: SimQueueRuntime = Depends(get_runtime), 
             "result": f"/api/llm/queue/tasks/{task_id}/result",
             "queue_state": f"/api/llm/queue/state?user_id={user_id}",
         },
+    )
+
+
+@router.get("/tasks/{task_id}/events")
+async def task_events(task_id: str):
+    q = EVENT_HUB.subscribe(task_id)
+
+    async def gen():
+        try:
+            yield sse_bytes("hello", {"task_id": task_id})
+            while True:
+                evt = await q.get()  # {"type":..., "data":..., "ts":...}
+                yield sse_bytes(evt["type"], evt["data"])
+        finally:
+            EVENT_HUB.unsubscribe(task_id, q)
+
+    return StreamingResponse(
+        gen(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
     )
 
 
