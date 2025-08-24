@@ -238,7 +238,8 @@ knowledge_override, style_override 입력을 통해, 사용자가 수정한 내�
 * Concurrency Stress Test api
 사용자가 몰려 대기해야하는 상황을 구현한 api입니다.
 TASK_ID를 반환하며, 해당 url에 접근 시 현재 상태와 stream 기반의 output을 받을 수 있습니다.
-curl -sS -X POST "http://localhost:8000/api/llm/queue/sim-then-generate" \
+
+> curl -sS -X POST "http://localhost:8000/api/llm/queue/sim-then-generate" \
   -H 'Content-Type: application/json' \
   -d '{
     "prequeue_count": 30,
@@ -258,8 +259,11 @@ curl -sS -X POST "http://localhost:8000/api/llm/queue/sim-then-generate" \
 # 진행도
 curl -sS "http://localhost:8000/api/llm/queue/tasks/<TASK_ID>/status"
 
-# non-stream 결과 (stream에서 result를 호출하면 {"detail":"stream-mode task. Use /tasks/{task_id}/stream"}를 출력)
+# non-stream 결과
+(stream에서 result를 호출하면 {"detail":"stream-mode task. Use /tasks/{task_id}/stream"}를 출력)
+
 curl -sS "http://localhost:8000/api/llm/queue/tasks/<TASK_ID>/result"
 
 # 완료 결과 (stream인 경우)
+
 curl -sS "http://localhost:8000/api/llm/queue/tasks/<TASK_ID>/event"
