@@ -178,9 +178,9 @@ curl "http://localhost:8000/api/jd?company_code=jobkorea&job_code=1000242&limit=
 
 
 
-# non stream queue 테스트 (내부 테스트용으로 실제 서비스에서 쓸 일은 없음)
+# non-stream queue 테스트 (내부 테스트용으로 실제 서비스에서 쓸 일은 없음)
 ## 동기 처리; 10명 대기(가짜) → 다 끝나면 실제 /jd/generate를 내부 호출, 결과 반환
-curl -sS -X POST http://localhost:8000/api/llm/queue/sim-then-generate \
+curl -sS -X POST "http://localhost:8000/api/llm/queue/sim-then-generate?mode=sync&stream=false" \
   -H 'Content-Type: application/json' \
   -d '{
     "prequeue_count": 10,
@@ -198,30 +198,12 @@ curl -sS -X POST http://localhost:8000/api/llm/queue/sim-then-generate \
   }'
 
 
-## 비동기 처리;
-curl -sS -X POST "http://localhost:8000/api/llm/queue/sim-then-generate?mode=async" \
+# async stream queue 테스트 (기본값으로 실제 서비스용. 차례까지 대기한 후에 stream output)
+## 비동기 + stream
+curl -sS -X POST "http://localhost:8000/api/llm/queue/sim-then-generate" \
   -H 'Content-Type: application/json' \
   -d '{
-    "prequeue_count": 20,
-    "sim": { "min_sec": 3, "max_sec": 5 },
-    "jd": {
-      "provider": "openai",
-      "model": "gpt-4o",
-      "language": "ko",
-      "company_code": "jobkorea",
-      "job_code": "1000242",
-      "style_source": "default",
-      "default_style_name": "일반적"
-    },
-    "wait_timeout_sec": 600
-  }'
-
-# stream queue 테스트 (실제 서비스용. 차례까지 대기한 후에 stream output)
-## 비동기 전용
-curl -sS -X POST "http://localhost:8000/api/llm/queue/sim-then-generate/stream" \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "prequeue_count": 10,
+    "prequeue_count": 30,
     "sim": { "min_sec": 3, "max_sec": 5 },
     "jd": {
       "provider": "openai",
@@ -236,11 +218,14 @@ curl -sS -X POST "http://localhost:8000/api/llm/queue/sim-then-generate/stream" 
   }'
 
 # 진행도
-curl -sS "http://localhost:8000/api/llm/queue/tasks/c1f2d95e-fbd0-4e9e-96db-cb18a52bc29b/status"
-# 완료 결과 (non-stream인 경우)
+curl -sS "http://localhost:8000/api/llm/queue/tasks/<TASK_ID>/status"
+
+# non-stream 결과 (stream에서 result를 호출하면 {"detail":"stream-mode task. Use /tasks/{task_id}/stream"}를 출력)
 curl -sS "http://localhost:8000/api/llm/queue/tasks/<TASK_ID>/result"
+
 # 완료 결과 (stream인 경우)
 curl -sS "http://localhost:8000/api/llm/queue/tasks/<TASK_ID>/event"
+
 
 # guardrail
 curl -X POST "http://localhost:8000/api/guardrail/check" \
