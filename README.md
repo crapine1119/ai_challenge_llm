@@ -33,19 +33,26 @@
 > npm install
 
 # 실행 방법 
+1. backend 실행
 > cd {project root} \
-> chmod +x scripts/dev_all.sh \
-> scripts/dev_all.sh start
+> chmod +x scripts/run_backend.sh \
+> chmod +x scripts/run_frontend.sh \
+> scripts/run_backend.sh start
 
-* 앱 페이지
+2. frontend 실행
+> cd {project root} \
+> ./scripts/run_frontend.sh start
+
+3. 브라우저 실행
 > http://localhost:5173
 
-*  로그 보기 (tail -f)
->scripts/dev_all.sh logs
-* 상태
-> scripts/dev_all.sh status
-* 중단
-> scripts/dev_all.sh stop
+* 기타
+>./scripts/run_backend.sh stop \
+>./scripts/run_backend.sh logs \
+
+>./scripts/run_frontend.sh status \
+>./scripts/run_frontend.sh logs \
+>./scripts/run_frontend.sh stop
 
 # 앱 설명
 접속시: 회사 / 직무 선택 (다른 회사 / 직무를 원할 경우 3으로 이동합니다. 이외에는 순서대로 진행합니다)
@@ -188,6 +195,7 @@
 
 ### 4. 기타 Backend Service API
 Frontend에 반영하지 못했으나, Backend에 PoC 수준의 기능 구현이 완료된 API들을 기재합니다.
+(backend/scripts/api_list.sh에 정리되어있습니다.)
 
 * JD 수정 api
 knowledge_override, style_override 입력을 통해, 사용자가 수정한 내용을 반영하여 재생성할 수 있도록 만들었습니다.
@@ -255,6 +263,11 @@ TASK_ID를 반환하며, 해당 url에 접근 시 현재 상태와 stream 기반
     },
     "wait_timeout_sec": 600
   }'
+
+* guardrail
+> curl -X POST "http://localhost:8000/api/guardrail/check" \
+  -H "Content-Type: application/json" \
+  -d '{"text": "이건 그냥 문장", "comment": "XX 같은 단어 포함"}'
 
 # 진행도
 curl -sS "http://localhost:8000/api/llm/queue/tasks/<TASK_ID>/status"
