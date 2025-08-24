@@ -8,9 +8,19 @@ import {
   generateJDWithDefault,
   generateJDWithGenerated
 } from '@/api/backend'
-import type { StylePresetItem, StyleDetail, JDGenerateParsed } from '@/api/types'
+import type { StylePresetItem, StyleDetail } from '@/api/types'
 
 type StepStatus = 'idle' | 'running' | 'done' | 'error'
+
+function normalizePresets(raw: any): StylePresetItem[] {
+  // API가 {"items":[...]} 또는 [...] 형태 모두 수용
+  const arr = Array.isArray(raw?.items) ? raw.items : Array.isArray(raw) ? raw : []
+  // JD 결과( markdown / saved_id 등 )가 섞여 들어오는 사고 방지
+  return arr
+    .map((it: any) => (it?.style ? it : { style: it }))
+    .filter((it: any) => it?.style && typeof it.style === 'object')
+    .filter((it: any) => !('markdown' in it) && !('saved_id' in it))
+}
 
 export const useAnalyzeStore = defineStore('analyze', {
   state: () => ({
@@ -71,9 +81,14 @@ export const useAnalyzeStore = defineStore('analyze', {
     },
 
     async loadStyles(params: { company_code: string; job_code: string }) {
-      this.presets = await getStylePresetsFull()
+      // 🔒 프리셋 정규화(+ JD 데이터 오염 방지)
+      const raw = await getStylePresetsFull()
+      this.presets = normalizePresets(raw)
+
+      // 🔒 회사 스타일 최신만 선택
       const latest = await getLatestGeneratedStyle(params.company_code, params.job_code)
-      this.companyStyle = latest ? { id: latest.id, style: latest.style } : null
+      // latest 예시: { id, company_code, job_code, created_at, style: {...} }
+      this.companyStyle = latest?.style ? { id: latest.id ?? 0, style: latest.style as StyleDetail } : null
     },
 
     async runPreBatch(params: { company_code: string; job_code: string }) {

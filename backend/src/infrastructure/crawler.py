@@ -275,6 +275,7 @@ class JobKoreaCrawler:
         prev_items = self.parse_list_items(BeautifulSoup(self.http.get(prev_list_url).text, "html.parser"))
 
         parsed_items = curr_items + prev_items
+
         if parsed_items:
             logging.info(f"Items for {company_id} are parsed ({len(parsed_items)})")
 

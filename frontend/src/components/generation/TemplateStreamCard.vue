@@ -44,8 +44,8 @@ const moreCount = computed(() => Math.max(props.template.sections.length - 4, 0)
 
 onMounted(() => {
   // 지연 후 타자 효과
-  const delay = props.delay ?? 300
-  const speed = props.speed ?? 18 // ms/char
+  const delay = props.delay ?? 400
+  const speed = props.speed ?? 20 // ms/char
   setTimeout(() => {
     started.value = true
     typing.value = true

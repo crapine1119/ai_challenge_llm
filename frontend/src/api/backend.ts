@@ -353,3 +353,36 @@ export const generateJDWithGenerated = async (payload: JDGenerateAPIRequest): Pr
   })
   return parseJDGenerateResponse(data)
 }
+
+import type { JDListItem, JDListResponse } from './types'
+
+// 최신 JD 3개 조회
+export async function getLatestJDs(params: {
+  company_code: string
+  job_code: string
+  limit?: number
+}): Promise<JDListItem[]> {
+  const { company_code, job_code, limit = 3 } = params
+  const { data } = await http.get<JDListResponse>('/api/jd', {
+    params: { company_code, job_code, limit }
+  })
+  // 방어코드: items가 배열인지 확인
+  if (data && Array.isArray(data.items)) return data.items
+  return []
+}
+
+// 회사/직무 수집 (JobKorea)
+export const collectJobkorea = async (payload: {
+  company_id: number
+  job_code: string
+  company_code?: string
+   // max_details?: number  // ✦ 옵션 제거(있어도 무시)
+}) => {
+  const body = {
+    company_code: 'jobkorea', // 고정
+    max_details: 3,
+    ...payload
+  }
+  const r = await http.post('/api/collect/jobkorea', body)
+  return r.data
+}

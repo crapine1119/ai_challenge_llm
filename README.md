@@ -1,263 +1,265 @@
-# JobKorea GenAI JD Generation Project
-
-본 프로젝트는 korcen (Apache-2.0)을 포함하고 있으며, 패키징 이슈로 경로만 일부 수정하여 사용합니다.
-
-0) 목적·평가 관점 요약
-
-목적: 기업 정보 + 과거 채용공고 + 사용자 질의로부터 맞춤형 채용공고를 생성하는 서비스의 정확도·안전·속도·UX를 비즈니스 관점에서 개선.
-
-평가 초점: 정답보다 문제 이해 → 원인 분석 → 현실적 해결책 → 운영·UX 설계.
-
-1) 문제 정의 (Markdown legacy 정교화)
-1.1 입·출력 / 태스크
-
-Input: 기업 정보(Company docs) + 과거 JD + 사용자 질의
-
-Output: 스타일/톤/레벨/직무에 맞춘 정형화 JD
-
-태스크 분해
-
-Entity Extraction: 기업·JD·질의에서 도메인 필드 추출(역량, 우대, 근무형태 등)
-
-Rewriting: 추출·선택된 정보로 사용자 의도에 맞춘 문장화
-
-Authoring: 섹션별 제약(길이·DEI·법규·스타일)을 반영해 완성 JD 출력
-
-1.2 핵심 제약
-
-Hallucination 억제: 허용되지 않은 필드를 추측 생성 금지
-
-민감·유해 표현 통제: DEI·법규·PII·비속어·연봉 추정 등 정책 고정
-
-TTFMC/지연 이슈: 다중 요청·대형 모델 지연 상황에서 이탈 최소화
-
-2) 이슈 1 — “사전 생성 데이터 중심 RAG”로 정확도·안전 확보
-2.1 원인 재정의
-
-(검색) 비정형 원문과 긴 문서는 임베딩 기반 검색에 노이즈·오탐을 유발
-
-(프롬프트) 필수 필드 미정의·출력 자유도가 높을수록 모델이 빈칸을 추측
-
-(검증) DEI/법 위반·민감 정보 사후 필터 미비
-
-2.2 설계 원칙
-
-RAG 최소화 & 정형 우선: “그때그때 벡터 검색”보다, 사전에 정규화·요약된 카탈로그를 1순위로 사용
-
-스키마 강제(추측 금지): Pydantic v2 스키마(additionalProperties:false) 기반 필드 바인딩
-
-다층 가드레일: 입력→생성중→출력의 연속 방어 체인
-
-2.3 데이터 층위(사전 생성 카탈로그)
-
-CompanyKnowledge: 기업 소개·문화·가치관·인재상(없으면 null 유지)
-
-RoleCatalog: 직무별 핵심 스킬 유니버스(빈도/PMI/예문/길이 가이드)
-
-StylePreset: 정형적, 트렌디(Notion류), 기술상세, 회사 고유 톤
-
-PastJD Digest: 과거 JD를 섹션 스니펫과 근거 메타로 요약(출처/날짜 유지)
-
-검색 순서: 정형 카탈로그 → 제한적 하이브리드 검색(필드별 스니펫).
-정형 매칭 실패 시에만 Top-k 벡터로 보조(필드 매핑 가능한 스니펫만 허용).
-
-2.4 사전 생성 파이프라인(예)
-
-(수집) 기업·JD 원문 → (정규화) 필드 추출·중복 제거 →
-(요약) 섹션 스니펫·키워드·PMI → (카탈로그화) Company/Role/Style/PastJD Digest
-
-(스트럭처) 모든 엔티티는 ID/버전/출처/시점을 보존(감사·회귀 분석 대비)
-
-2.5 생성 단계 제어
-
-섹션 단위 생성(Requirements → Responsibilities → …)
-
-스키마 바인딩: 누락·미확정은 **null**로 남기고 추정 금지
-
-근거 친화: 각 bullet은 내부적으로 근거 ID를 태깅(출처 추적·품질 분석용)
-
-2.6 민감·유해 통제
-
-금지 규칙: 연령/성별/국적/혼인/병역/장애 차별, 개인정보 요구, 연봉 임의 추정 금지
-
-입력 가드: korcen(Apache-2.0) → OpenAI Moderation → PII 스크럽
-
-출력 가드: DEI 룰체커 → 표절/중복율 → 재작성 루프(사전 정의 한도 내 자동 재시도)
-
-2.7 실패 시 폴백
-
-데이터 부족: RoleCatalog + StylePreset 조합의 템플릿 초안 제시
-
-충돌 데이터: 최신·신뢰도 높은 출처 우선(우선순위 정책) + 사용자 확인 플로우
-
-2.8 품질 측정
-
-스키마 위반율 < 5%
-
-DEI/법 플래그 = 0(정책 위반 시 자동 재작성 성공률 ≥ 98%)
-
-근거 커버리지(requirements bullet 대비 근거 연결 비율) ≥ 85%
-
-편집율(필수 섹션) P50 ≤ 20% (프리셋/카탈로그 정밀도 지표)
-
-3) 이슈 2 — “다중 API 통제 + 사전 생성 → 스트리밍 + 대기 가치”로 이탈 감소
-3.1 다중 API 통제(안정성·성능)
-
-멀티 공급자/엔드포인트: 모델·리전·계정 분산, 핫/콜드 라우팅
-
-Admission Control: 사용자/테넌트별 동시성·TPS·토큰 한도
-
-스케줄링: 라운드로빈 + 짧은 작업 선호 + 모델/큐 상태 기반 동적 우선순위
-
-폴백 티어:
-
-T0: 경량 모델(초안/목차/요약)
-
-T1: 중형(세부 섹션)
-
-T2: 대형(최종 품질/스타일 정교화)
-
-SLO 위반/장애 시 하위 티어로 자동 강등
-
-Hedged Request(선택): 임계시간 초과 시 보조 요청 발사 후 더 빠른 응답 채택
-
-서킷 브레이커: 에러/타임아웃 임계 도달 시 자동 우회/냉각
-
-3.2 사전 생성 + 캐시(대기 이전에 “즉시 값” 제공)
-
-프리셋×회사×직무×레벨 조합으로 Top-N 초안(요약형 3종) 사전 생성
-
-역할별 상위 스킬·PMI·예문, 제목 문구 후보, 길이 가이드를 사전 계산
-
-최초 화면에서 즉시 카드/프리셋으로 표시(0-1s)
-
-3.3 스트리밍(지각 성능 개선)
-
-SSE로 섹션별 **First Meaningful Chunk (TTFMC)**를 1~2초 내 제공
-
-진행률 모델: 큐(0–90%) / 생성(90–99%) / 완료(100%) + ETA±
-
-점진적 상세화:
-
-초안 bullets(경량) →
-
-각 bullet 근거/예시 보강(중형) →
-
-문체·톤 일관화(대형, 필요 시)
-
-3.4 대기 가치(Waiting Value) — 이탈률 방지 핵심
-
-대기 중에도 채용 의사결정에 즉시 쓸 수 있는 정보를 카드로 제공:
-
-실시간 채용시장 (Role×Region×Seniority)
-
-수요지수 D_t, 공급지수 S_t, 수급지수 I_t=D_t/(S_t+ε)
-
-스킬 PMI 상위 + 급등/급락 태그(ESD)
-
-제목 CTR 예측 Top-k(길이/형태소/숫자·이모지·시니어리티 피처)
-
-즉시 반영 버튼: “제목 대체”, “요건에 스킬 추가”
-
-인기 지원공고 & 피드백 댓글
-
-뷰/저장/지원/참여 점수의 랭킹 + 신선도 감쇠
-
-댓글은 모더레이션→PII 스크럽 후 노출, 상위 코멘트 LLM 요약
-
-차별점 배지(복지·근무형태·보상 표기)
-
-이전 공고 성과 리플레이 & 경쟁사 레이더
-
-현재 JD와 과거 JD 유사도(제목 BM25 + 스킬 Jaccard/코사인)
-
-Diff 임팩트(제목 길이/근무형태/보상 표기 변화 ↔ 전환율 차이)
-
-경쟁사 새 공고 수/스킬 트렌드/근무형태 하이라이트
-
-JD 생성 미리보기 대시보드
-
-속도: TTFMC, P50/P95, 섹션별 시간, 내 큐 위치·ETA
-
-품질: 읽기 난이도, 수동태 비율, 중복/표절, DEI 플래그
-
-행동: 섹션별 수정/재생성율, 저장/내보내기
-
-목표 UX: 대기=손실 시간이 아니라 학습·결정 가치를 얻는 구간으로 전환.
-
-3.5 지표·SLO
-
-TTFMC: ≤ 1.5s(초안) / P50 latency: ≤ 8s / P95: ≤ 18s
-
-큐 ETA 오차(P50): ≤ ±25%
-
-중단율(생성 실패): ≤ 1% / 폴백 성공률: ≥ 98%
-
-이탈률: 기존 대비 ≥ 30% 감소
-
-대기 중 상호작용율(카드 클릭/적용): ≥ 25%
-
-4) 데이터·카탈로그 체계(운영 기준)
-4.1 직무 코드(발췌)
-
-인사담당자 1000201, AI/ML 1000242, 백엔드 1000229, 프론트 1000230, 마케팅기획 1000187, 재무 1000210
-
-4.2 저장 구조(요지)
-
-카탈로그: CompanyKnowledge, CompanyJDStyle, RoleCatalog(core_skills, PMI, phrasing), PastJD Digest
-
-사전 생성 템플릿: 회사코드 | 직무코드 | 스타일 | JD 템플릿N
-
-시장/인기/레이더: 스냅샷·스킬통계·랭킹·코멘트·경쟁사 지표
-
-이벤트: jd_generation_events(requested, section_stream, first_meaningful_chunk, guardrail.blocked/retry, saved 등)
-
-5) 가드레일·거버넌스
-
-체인: korcen(Apache-2.0, 경로만 일부 수정·고지 유지) → OpenAI Moderation → PII Scrubber → DEI 룰체커 → 표절/중복
-
-정책:
-
-보호 속성(연령·성별·국적 등)·개인정보·임의 연봉 추정 금지
-
-누락 필드는 추정 채우기 금지(스키마 null)
-
-감사성: 모든 생성물에 근거ID·출처·시점 메타 보존
-
-프라이버시: 대외 공유 시 집계·비식별만(K-anonymity 수준 권장)
-
-6) 화면 흐름(요약, Vue 기준)
-
-회사 선택 → 직무/연차 선택
-
-중앙 4열 카드: 기본 프리셋 3 + 회사 스타일 1 즉시 표시(사전 생성)
-
-분석하기 클릭 시 섹션별 SSE 스트리밍 시작(초안→세부→정교화)
-
-우측 레일: 실시간 시장 / 인기공고·댓글 / 리플레이·레이더 / 미리보기 대시보드 상시 노출
-
-문제(DEI/정책) 감지 시 1-클릭 재작성 제안
-
-7) 성공 지표·실험
-
-정확도: 스키마 위반율, 근거 커버리지, 사후 편집율
-
-안전: DEI/법 플래그 0, 재작성 성공률
-
-속도: TTFMC/P50/P95, ETA 오차
-
-이탈: 세션 이탈률, 대기 중 상호작용율, 저장/내보내기율
-
-실험:
-
-A/B: (사전 생성 유무)×(대기 가치 카드 조합)×(스트리밍 전략)
-
-라우팅: 경량→중형→대형 티어 스위치 임계 최적화
-
-8) 결론
-
-이슈 1은 사전 생성·정형 카탈로그를 RAG의 제1소스로 승격하고, 스키마 바인딩 + 다층 가드레일로 “추측”을 구조적으로 차단해야 합니다.
-
-이슈 2는 다중 API 통제로 안정성을 확보하고, 사전 생성 → 스트리밍으로 체감 속도를 높이며, 대기 가치 카드로 대기 자체를 유의미한 시간으로 전환해야 합니다.
-
-위 전략은 운영·컴플라이언스·UX를 동시에 충족하며, 공모전 목표(비즈니스 문제 해결 중심)에 부합합니다.
+# JobKorea GenAI Job Description (JD) Generation Project
+
+> 본 프로젝트는 korcen (Apache-2.0)을 포함하고 있으며, 패키징 이슈로 경로만 일부 수정하여 사용합니다.
+
+
+---
+# 설치 방법
+### Git
+> git clone https://github.com/crapine1119/ai_challenge_llm.git
+
+### Backend
+1. docker 설치
+> https://docs.docker.com/desktop/setup/install/mac-install/
+2. uv 설치
+> curl -LsSf https://astral.sh/uv/install.sh | sh
+3. env 설정
+> cd backend \
+> cp .env.example .env \
+
+**! .env의 OPENAI_API_KEY에 api key를 반드시 등록해주세요** 
+
+### Frontend
+1. macOS/Linux nvm: Node LTS 설치 (권장: 20.x 또는 22.x)\
+   (이미 설치 되어있다면 넘어가셔도 됩니다.)
+> curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
+
+2. 모듈 설치 (새로운 터미널에서 실행)
+> nvm install --lts \
+> nvm use --lts \
+> npm install -D tailwindcss postcss autoprefixer \
+> npx tailwindcss init -p \
+> cd frontend \
+> npm install
+
+# 실행 방법 
+> cd {project root} \
+> chmod +x scripts/dev_all.sh \
+> scripts/dev_all.sh start
+
+* 앱 페이지
+> http://localhost:5173
+
+*  로그 보기 (tail -f)
+>scripts/dev_all.sh logs
+* 상태
+> scripts/dev_all.sh status
+* 중단
+> scripts/dev_all.sh stop
+
+# 앱 설명
+접속시: 회사 / 직무 선택 (다른 회사 / 직무를 원할 경우 3으로 이동합니다. 이외에는 순서대로 진행합니다)
+1. 직무 분석하기:
+   - 분석하기를 누를 경우 먼저 회사의 스타일을 추출하고, 현재 화면에 보이는 스타일들을 활용하여 JD 생성을 진행합니다.
+   - 해당 스타일은 사전에 설정한 3가지 템플릿 (간결, 상세, 트렌디)을 기준과, JD를 기반으로 LLM이 생성한 결과입니다.
+   - 해당 페이지는 실서비스에서 배치 (사용자가 적은 시간에 자동으로)로 실행되는 것을 목표로 합니다. 
+
+2. 실시간 JD 생성하기
+   - 분석하기에서 사전에 생성한 JD를, 마치 실시간 서비스인것 처럼 보여주는 페이지입니다.
+   - 추후에 생성된 JD를 사용자의 입력을 받아 수정하고, 이를 기반으로 LLM을 재생성하는 기능을 추가할 예정입니다. \
+     (backend에만 해당 기능이 존재하고 frontend에는 반영되지 않았습니다.)
+   - 또한, 생성 기능이 추가될 경우 아래의 전략에서 제시할 JD 갤러리 페이지를 팝업으로 보여줄 예정입니다. 
+
+3. 직무 추가하기
+   - 잡코리아 웹에 표시되는 회사 및 직무명의 코드를 기입할 경우, 새로운 직무에 대한 JD를 생성할 수 있습니다.
+
+4. 주의사항 \
+   - PoC용 앱으로 LLM을 활용하여 빠르게 frontend 코드를 구현하여, 안정성이 떨어질 수 있습니다. \
+   페이지 로드가 안된다면 새로 고침을 누르거나 재접속해주시면 감사하겠습니다.
+   - 직무 추가하기의 경우 PoC용으로 잡코리아 backend를 모방하기 위해 임시로 구현하였습니다. \
+   과하게 요청할 경우 접속 인증이 필요하여, 실패하는 경우가 발생합니다. 이 경우에는 해당 페이지로 직접 접속하여 인증을 해제해주시면 다시 정상적으로 작동합니다.
+
+
+---
+
+# 1. 문제 정의
+
+### JD 생성 서비스의 문제점
+📌 이슈1. LLM의 부정확한 응답 및 민감 정보 처리 문제
+> 기업 정보에 없는 내용을 임의로 생성하거나, 성별·연령 등 부적절한 조건이 포함되는 경우 발생 \
+> 욕설 또는 민감한 정보(예: 연봉)에 대한 비판 없는 응답 문제 발생
+
+📌이슈2. LLM 응답 지연으로 인한 사용자 이탈
+
+본 프로젝트에서는 LLM 서비스를 운영하면서 피할 수 없는 위 두가지 문제를 다음의 방법들을 통해 해결하려고 한다.
+
+1) Prompt Engineering 기반의 사전 Entity 추출 및 통제
+2) 가드레일 (input, output) 정책과 통제된 정보를 기반으로 한 JD 생성
+3) Queue 관리에 기반한 실시간 대기 정보 제공
+
+## 1.1. Targets & Strategies Summary
+
+- **Entity Extraction**: 기업·JD·질의에서 도메인 필드 추출 (역량, 우대, 근무형태 등)
+  - 사전에 내용을 미리 추출함으로써 RAG 방식으로 Hallucination 및 민감 정보를 통제하기 위함
+  - 템플릿 형태로 가공하여 사용자에게 보여줌
+- **JD Generation**: 템플릿 (섹션, 스타일, 기타 요구사항)을 반영하여 최종 JD 출력
+  - 사전 생성된 내용을 보여줌으로써 사용자 경험을 개선하고, 운영 안정성을 높일 수 있음 (일배치로 미리 JD를 생성하는 방식)
+  - 사용자가 원할 경우, 사전 생성된 JD를 수정하고 LLM을 통하여 2차 가공
+  - 생성된 내용이 있고, 사전 생성 프롬프트보다 적은 수의 토큰만 사용하기 때문에 빠른 응답이 가능 (다중 요청 상황 대응)
+- **LLM queue**: 사용자에게 실시간으로 남은 대기시간을 보여주는 기능
+  - Background에서 생성이 진행되며, 처리 평균 시간을 계산하여 응답 예상 시간을 제공 
+  - (TODO) 대기 시간이 일정 시간 이상 길어질 경우, JD 갤러리 (타 회사에서 생성한 JD를 확인하고, 댓글/좋아요 등의 기능) 화면을 보여줌
+  - (TODO) 다중 API 운영을 통한 응답 시간 최소화 (gateway 서버 개발 필요)
+- **Guardrail**: 사용자가 부적절한 요청을 했을 때, 이를 막기 위한 기능
+  - korcen과 같은 룰 기반의 패키지지로 빠르게 1차 방어
+  - (TODO) Deeplearning-based API (e.g. openai omni-moderation-latest; 비용 발생)를 활용하여 2차 방어 
+  - (TODO) LLM-finetuning을 활용하여 sLLM 기반의 guardrail model을 직접 운영
+
+# 2. Method
+## 2.1. Entity Extraction
+
+* 서비스 상황에서 사용자 또는 LLM에 의해 부적절한 요청, 답변이 생성되는 것은 매우 위험 (가드레일 필수) 
+
+* 이러한 문제를 “사전 생성 데이터 중심 RAG” 기반으로 정확도·안전 확보하는 것이 목적
+
+* 사전에 정보를 추출할 수 있는 소스는, Job Korea에 존재하는 채용 공고와 직무에 대한 정보
+  * 해당 정보들로부터 JD의 스타일, 직무에 대한 기술 정보 (역량, 세부 기술 등)을 추출
+
+
+* Workflow
+  - JD + 직무명 (few shot): 스타일 추출, 기술 추출 
+  - 직무명 (zero shot): 일반적으로 요구되는 지식/기술명 추출
+
+* Entity 설계 정보
+  * CompanyKnowledge: 기업 소개·문화·가치관·핵심 역량(없으면 null 유지)
+  * StylePreset: 정형적, 트렌디(Notion류), 기술상세, 회사 고유 톤
+
+(데이터의 경우 크롤링을 통해 Job Korea 홈페이지에서 수집하였습니다.)
+
+## 2.2 JD Generation
+* 사전에 생성한 "Entity"를 기반으로 JD를 생성하여, API/GPU 사용량을 최소화
+
+* 템플릿 별 N개의 JD를 제공하고 사용자가 수정할 수 있는 기능을 제공
+  * 수정하는 경우:
+    * 사전 DB의 정보가 아닌, 정제된 적은 토큰을 입력하고 Task가 단순하기 때문에 (Rewriting) 
+    
+      적은 리소스만 가지고도 효율적으로 TTFT를 개선할 수 있음 
+  * 수정하지 않는 경우:
+    * 생성된 JD를 사용자가 선택할 경우 확인을 위한 경고 문구를 호출하고 (TODO), 웹사이트에 공고를 업로드함 (기존 시스템과의 연동)
+
+* 마지막으로, 노출되는 **모든 생성되는 JD**는 반드시 streaming으로 처리하여, 사용자 경험을 극대화할 수 있도록 한다.   
+
+## 2.3. LLM Queue
+* 2.2에서 제시한 전략은 하드웨어 리소스 관점에서의 최적화인 반면, LLM Queue의 경우 사용자 경험 관점에서의 대응 전략이다.
+* 자원이 무한하다면 수많은 API를 gateway 서버와 함께 사용하는 것이 가능하다 (라운드로빈 또는 vllm 등의 패키지에서 제공하는 token 처리량을 활용하여 개발이 가능하다).
+* 그러나, 현실적인 비용을 생각해봤을때, 실시간 대기 시간과 퍼센티지 등을 제공하여 사용자 경험을 개선하는 것이 더 효율적일 수 있다.
+* 단순 대기 시간만으로는 사용자 이탈을 막기 어렵기 때문에, 인사 담당자들이 업무에 도움이 되는 정보들을 얻을 수 있는 "JD 갤러리"를 운영하는 것이 이탈 방지에 도움이 될 것이라고 생각한다. 
+
+### 2.3.1 JD 갤러리
+* JD 생성을 기다리는 동안 자연스럽게 경쟁사 또는 관련 직무 JD를 보여주고, 생성된 JD의 수정에 도움이 될만한 정보를 제공한다. 
+* 특히, 관련 직무/경쟁사의 인기 지원 공고, 지원자 현황, 통계 차트, 합격률, 팁, 좋아요/댓글 기능들을 함께 제공하여, 정보와 재미를 동시에 느낄 수 있도록 유도한다 (TODO)
+* 이러한 검색 기능을 제공하기 위해선, 간단한 키워드 / 벡터 검색을 제공하는 검색엔진을 활용할 수 있으며, 서비스 고도화를 위해 Splade와 같은 Hybrid Search 또는 Embedding Model fine-tuning을 진행할 수 있다. 
+* 또한, 대기 시간이 아니더라도 별도의 페이지를 상시 운영하며, 인사 담당자 뿐 아니라 일반 사용자들도 함께 소통할 수 있도록 설계한다.
+
+## 2.4. Guardrail
+* 우선 korcen 룰 기반의 패키지로 입/출력을 모두 빠르게 1차적으로 방어하며, 룰에 새로운 규칙을 추가하여 문제가 재발하는 경우를 방지할 수 있다. 
+* 그러나 문맥이 고려되지 않기 때문에, AI 기반의 가드레일이 추가적인 전략이 될 수 있다.
+* 현재 공개된 모델 (e.g. openai omni-moderation-latest) 들이 텍스트의 위험 정도를 수치로서 제공해주고 있지만, 한국어 이해는 상대적으로 떨어지는 모습을 보인다. 
+* 따라서, 장기적인 관점에서 sLLM fine-tuning을 통한 가드레일 모델 운영이 반드시 필요하다고 생각한다. 
+* 마지막으로, GenAI 서비스에서 모든 과정의 승인은 사용자의 선택으로 결정되어야하므로, 이를 사용자에게 분명히 고지하고 서비스를 운영하는 것이 중요할 것이다. 
+
+---
+# 3. Prompt / Context Engineering 전략
+- 기술/스타일 영역의 경우 반복해서 뽑았을때도 일정하게 유지되는 것을 목표 \
+  어느정도의 자유도를 주면서도 재생성시 값이 크게 달라지지 않도록 하기 위해 temperature는 0.3으로 설정
+- seed 고정, top_k / top_p를 낮추는 방법으로도 적용 가능
+- JD 생성의 경우 오히려 다양한 형식으로 생성하도록 temperature를 0.7로 설정하여, 사용자가 항상 정형화된 답변을 받는다는 느낌을 들지 않도록 유도
+
+### 3.1. 프롬프트 역할 / 목록
+* JD를 활용하여 회사만의 고유 스타일 생성
+> backend/src/prompts/ko/company.analysis.jd_style.v1.yaml
+
+* JD를 활용한 회사에 필요한 직무 관련 지식 / 기술 생성
+> backend/src/prompts/ko/company.analysis.job_competency_few_shot.v1.yaml
+
+* 직무명만 입력하여, 직무 관련 지식 / 기술을 폭넓게 생성 (추후에 검색 tool을 연동함으로써, 빠르게 바뀌는 직무 지식을 보완)
+> backend/src/prompts/ko/company.analysis.job_competency_zero_shot.v1.yaml
+
+* 앞서 생성한 스타일, 지식을 활용하여 템플릿에 맞는 JD를 생성
+> backend/src/prompts/ko/jd.generation.v1.yaml
+
+### 3.2. 설계 전략
+- 개인정보 및 민감정보를 사용자가 임의로 수정할 수 없게 만들기 위해, 시스템 프롬프트는 사용자가 수정할 수 없도록 설계했습니다.
+- company.analysis 유저 프롬프트는 회사의 정보들을 사전에 생성하는 것을 목표로 합니다.
+- 이를 위해 RAG와 같이 JD를 fewshot으로 제공하였고, 생성 예시를 한번 더 제공하여 json 형식을 맞추도록 유도했습니다.
+- jd.generation 프롬프트는 실제 JD를 입력하지 않고 company.analysis로 생성한 지식과 스타일만 입력으로 들어가게 됩니다.
+- 이때, 생성 단계에서 사용자의 입력이 들어갈 수 없기 때문에, 부적절한 내용을 생성하는 것을 방지할 수 있는 효과가 있습니다.
+
+
+### 4. 기타 Backend Service API
+Frontend에 반영하지 못했으나, Backend에 PoC 수준의 기능 구현이 완료된 API들을 기재합니다.
+
+* JD 수정 api
+knowledge_override, style_override 입력을 통해, 사용자가 수정한 내용을 반영하여 재생성할 수 있도록 만들었습니다.
+> curl -X POST "http://localhost:8000/api/jd/generate" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "openai",
+    "model": "gpt-4o",
+    "company_code": "jobkorea",
+    "job_code": "1000242",
+    "knowledge_override": {
+      "introduction": "비판적이고 직관적으로 생각합니다.",
+      "culture": "실험 중심, 데이터 기반 의사결정",
+      "values": ["고객집착", "학습과 공유", "끝까지 실행"],
+      "ideal_traits": ["문제정의 능력", "협업", "주도성"],
+      "requirements": {
+        "competencies": ["데이터 해석", "문제해결"],
+        "skills": ["Python", "PyTorch", "SQL"],
+        "project_experience": ["추천모델 운영", "실시간 서빙"]
+      },
+      "preferred": {
+        "competencies": ["성능최적화", "A/B 테스트 설계"],
+        "skills": ["TensorFlow", "ONNX", "Triton"],
+        "project_experience": ["대규모 트래픽 환경"]
+      },
+      "extras": {
+        "benefits": ["자기계발비", "리모트 옵션"],
+        "locations": ["서울 본사"],
+        "hiring_process": ["서류", "실무면접", "임원면접", "처우협의"]
+      }
+    },
+    "style_override": {
+      "style_label": "기술 중심-협력적",
+      "tone_keywords": ["혁신적", "협력적", "실험적"],
+      "section_outline": ["About Us", "Team Introduction", "Responsibilities", "Qualifications", "Preferred Qualifications", "Hiring Process"],
+      "templates": {
+        "About Us": "회사의 미션과 임팩트를 간결히 소개합니다.",
+        "Team Introduction": "팀이 해결하는 문제와 협업 방식을 설명합니다.",
+        "Responsibilities": "핵심 역할과 기대 결과를 불릿으로 정리합니다.",
+        "Qualifications": "필수 요건을 구체적으로 나열합니다.",
+        "Preferred Qualifications": "우대 조건을 구체적으로 나열합니다.",
+        "Hiring Process": "전형 절차를 간단히 제공합니다."
+      }
+    }
+  }'
+
+
+* Concurrency Stress Test api
+사용자가 몰려 대기해야하는 상황을 구현한 api입니다.
+TASK_ID를 반환하며, 해당 url에 접근 시 현재 상태와 stream 기반의 output을 받을 수 있습니다.
+curl -sS -X POST "http://localhost:8000/api/llm/queue/sim-then-generate" \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "prequeue_count": 30,
+    "sim": { "min_sec": 3, "max_sec": 5 },
+    "jd": {
+      "provider": "openai",
+      "model": "gpt-4o",
+      "language": "ko",
+      "company_code": "jobkorea",
+      "job_code": "1000242",
+      "style_source": "default",
+      "default_style_name": "일반적"
+    },
+    "wait_timeout_sec": 600
+  }'
+
+# 진행도
+curl -sS "http://localhost:8000/api/llm/queue/tasks/<TASK_ID>/status"
+
+# non-stream 결과 (stream에서 result를 호출하면 {"detail":"stream-mode task. Use /tasks/{task_id}/stream"}를 출력)
+curl -sS "http://localhost:8000/api/llm/queue/tasks/<TASK_ID>/result"
+
+# 완료 결과 (stream인 경우)
+curl -sS "http://localhost:8000/api/llm/queue/tasks/<TASK_ID>/event"

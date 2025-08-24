@@ -1,64 +1,50 @@
 <template>
   <section class="space-y-8">
-    <!-- 상단 선택 UI 제거됨 -->
-
-    <!-- 홈 카드 3종 복구: 분석 / 실시간 생성 / 크롤링 -->
+    <!-- 홈 카드 3종: 분석 / 실시간 생성 / 크롤링 -->
     <div class="grid gap-6 md:grid-cols-3">
-      <!-- 직무 분석하기 -->
-      <AppCard title="1. 직무 분석하기" badge="일배치">
-        <p class="text-sm text-gray-600">
-          과거 채용공고를 기준으로 회사 JD 스타일을 추출합니다.
-          전날 배치 기준으로 생성하는 것을 가정하며, 사전 생성된 내용을 기반으로<br>
-          사용자 경험을 극대화하고, LLM service의 단점을 상쇄하는 것이 목표입니다.
-        </p>
-        <div class="mt-4 flex gap-3">
-          <AppButton @click="goDashboard">바로 보기</AppButton>
-        </div>
-      </AppCard>
-
-      <!-- 실시간 JD 생성하기 (복구됨) -->
-      <AppCard title="실시간 JD 생성하기" badge="스트리밍">
-        <p class="text-sm text-gray-600">
-          사전에 생성 JD를 Streaming으로 보여줌으로써<br>
-          사용자가 실시간 생성 서비스라고 느끼도록 도와줍니다.<br>
-          (TODO: Streaming 및 JD 수정)
+      <!-- 1. 직무 분석하기 -->
+      <router-link :to="{ name: 'dashboard' }" class="block rounded-lg border bg-white p-4 hover:bg-gray-50">
+        <h3 class="text-lg font-semibold">1. 직무 분석하기</h3>
+        <p class="mt-2 text-sm text-gray-600">
+          - 과거 채용공고를 기준으로 회사 JD 스타일을 추출합니다.<br>
+          - 전날 배치 기준으로 생성(일배치)하여 Hallucination과 비용을 줄입니다.<br>
+          - 사전 생성된 내용을 호출해 UX를 개선합니다.
         </p>
         <div class="mt-4">
-          <AppButton @click="goGenerate">지금 생성</AppButton>
+          <span class="inline-block rounded bg-black px-3 py-2 text-sm text-white">바로 보기</span>
+        </div>
+      </router-link>
+
+      <!-- 2. 실시간 JD 생성하기 -->
+      <router-link :to="{ name: 'generate-realtime' }" class="block rounded-lg border bg-white p-4 hover:bg-gray-50">
+        <h3 class="text-lg font-semibold">2. 실시간 JD 생성하기</h3>
+        <p class="mt-2 text-sm text-gray-600">
+          사전에 생성된 JD를 스트리밍 연출로 보여주어 실시간처럼 느끼게 합니다.
+        </p>
+        <div class="mt-4">
+          <span class="inline-block rounded border px-3 py-2 text-sm">지금 생성</span>
         </div>
         <p class="mt-2 text-xs text-gray-500">
-          회사·직무는 우측 상단 <b>“직무 변경”</b> 버튼에서 언제든 선택할 수 있어요.
+          회사·직무는 우측 상단 <b>“직무 변경”</b>에서 선택합니다.
         </p>
-      </AppCard>
+      </router-link>
 
-      <!-- 직무 추가하기 -->
-      <AppCard title="직무 추가하기" badge="크롤링">
-        <p class="text-sm text-gray-600">
-          회사/직무 코드로 데이터를 수집해 DB에 반영합니다.
+      <!-- 3. 직무 추가하기 -->
+      <router-link :to="{ name: 'collect' }" class="block rounded-lg border bg-white p-4 hover:bg-gray-50">
+        <h3 class="text-lg font-semibold">3. 직무 추가하기</h3>
+        <p class="mt-2 text-sm text-gray-600">
+          - 기본 제공되는 회사/직무 외에 다른 데이터로 테스트하고 싶은 경우.<br>
+          - Job Korea의 회사/직무 코드로 데이터를 수집해 DB에 반영합니다.
         </p>
         <div class="mt-4">
-          <AppButton @click="goCollect">직무 추가</AppButton>
+          <span class="inline-block rounded border px-3 py-2 text-sm">직무 추가</span>
         </div>
-      </AppCard>
+      </router-link>
     </div>
   </section>
 </template>
 
 <script setup lang="ts">
-import { useRouter } from 'vue-router'
-import AppCard from '@/components/common/AppCard.vue'
-import AppButton from '@/components/common/AppButton.vue'
-
-const router = useRouter()
-
-function goGenerate() {
-  // 회사/직무 선택은 헤더의 "직무 변경" 모달에서 처리 (초기 진입 시 자동 오픈)
-  router.push({ name: 'generate-realtime' })
-}
-function goDashboard() {
-  router.push({ name: 'dashboard' })
-}
-function goCollect() {
-  router.push({ name: 'collect' })
-}
+// 홈에서는 어떤 스토어/실시간 컴포넌트도 import하지 않습니다.
+// useRouter / AppButton 불필요 → 제거
 </script>

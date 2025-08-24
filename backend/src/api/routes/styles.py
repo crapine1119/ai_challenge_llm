@@ -98,7 +98,7 @@ async def get_latest_generated_style(company_code: str, job_code: str):
                 "tone_keywords": row.tone_keywords or [],
                 "section_outline": row.section_outline or [],
                 "templates": row.templates or {},
-                "example_jd_markdown": "",
+                "example_jd_markdown": build_style_digest_markdown(row.__dict__) if row.templates else "",
             }
         )
         item = GeneratedStyleItem(
@@ -142,7 +142,7 @@ async def list_generated_styles(
                     "tone_keywords": r.tone_keywords or [],
                     "section_outline": r.section_outline or [],
                     "templates": r.templates or {},
-                    "example_jd_markdown": "",
+                    "example_jd_markdown": build_style_digest_markdown(r.__dict__) if r.templates else "",
                 }
             )
             items.append(

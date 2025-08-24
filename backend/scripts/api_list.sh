@@ -8,6 +8,16 @@ curl -X POST "http://localhost:8000/api/collect/jobkorea" \
     -d '{"company_id":1517115,"company_code":"jobkorea","job_code":"1000242","max_details":3}'
 
 
+
+curl -X POST "http://localhost:8000/api/collect/jobkorea" \
+  -H "Content-Type: application/json" \
+    -d '{"company_id":1392633,"company_code":"hwocean","job_code":"1000201","max_details":3}'
+
+curl -X POST "http://localhost:8000/api/collect/jobkorea" \
+  -H "Content-Type: application/json" \
+    -d '{"company_id":1392633,"company_code":"hwocean","job_code":"1000242","max_details":3}'
+
+
 # 스타일 GET
 ## 프리셋 목록:
 curl "http://localhost:8000/api/styles/presets"

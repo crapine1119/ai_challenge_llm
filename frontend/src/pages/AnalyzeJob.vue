@@ -1,19 +1,19 @@
 <template>
   <div class="space-y-6">
-    <!-- 헤더 + 액션 2개 -->
+    <!-- AnalyzeJob.vue 상단 헤더 교체 -->
     <div class="flex items-start justify-between">
       <h1 class="text-2xl font-semibold">직무 분석하기</h1>
       <div class="flex gap-2">
         <button
           class="rounded bg-black px-3 py-2 text-sm text-white hover:bg-gray-800 disabled:opacity-50"
-          :disabled="!canRun || runningAnalysis || runningBatch"
+          :disabled="!canRun || runningAnalysis || analyze.batchStatus==='running'"
           @click="onAnalyze"
         >
           분석하기
         </button>
         <button
           class="rounded border px-3 py-2 text-sm hover:bg-gray-50 disabled:opacity-50"
-          :disabled="!canRun || runningAnalysis || runningBatch"
+          :disabled="!canRun || runningAnalysis || analyze.batchStatus==='running'"
           @click="onRefresh"
         >
           새로고침
@@ -53,18 +53,22 @@
 
       <!-- 카드 -->
       <div v-else class="grid gap-4 md:grid-cols-4">
-        <StyleCard
-          v-for="(p, i) in topPresets"
-          :key="p.style.style_label + i"
-          title="기본 스타일 프리셋"
-          badge="PRESET"
-          :detail="p.style"
-        />
-        <StyleCard
-          title="회사 스타일 최신"
-          badge="GENERATED"
-          :detail="companyStyle?.style || null"
-        />
+      <!-- 프리셋 카드 -->
+      <StyleCard
+        v-for="(p, i) in topPresets"
+        :key="`preset:${p.style?.style_label ?? 'unknown'}:${i}`"
+        :title="p.style.style_label"
+        badge="PRESET"
+        :detail="p.style"
+      />
+
+      <!-- 회사 스타일 카드 -->
+      <StyleCard
+         :key="`gen:${companyCode}:${jobCode}:${companyStyle?.style?.style_label ?? 'none'}`"
+         title="회사 스타일 최신"
+         badge="GENERATED"
+         :detail="companyStyle?.style || null"
+      />
       </div>
 
       <p v-if="!loading && topPresets.length === 0" class="mt-2 text-xs text-amber-600">

@@ -8,7 +8,9 @@ export const routes: RouteRecordRaw[] = [
   { path: '/generate/board', name: 'board', component: () => import('@/pages/Board.vue') },
   { path: '/collect', name: 'collect', component: () => import('@/pages/CrawlAdd.vue') },
   { path: '/analyze', name: 'dashboard', component: () => import('@/pages/AnalyzeJob.vue') },
-  { path: '/:pathMatch(.*)*', name: 'not-found', component: () => import('@/pages/NotFound.vue') }
+  { path: '/:pathMatch(.*)*', name: 'not-found', component: () => import('@/pages/NotFound.vue') },
+  { path: '/collect', name: 'collect', component: () => import('@/pages/Collect.vue')
+}
 ]
 
 // (원래 index.ts에서 `import { routes } from './routes'` 형태를 쓰고 있으므로 named export 유지)

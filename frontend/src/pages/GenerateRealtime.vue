@@ -1,186 +1,239 @@
 <template>
-  <div class="space-y-6">
-    <h1 class="text-2xl font-semibold">실시간 JD 생성</h1>
-
-    <!-- 현재 선택 표시: '이름' 우선 -->
-    <div class="rounded border bg-white p-3 text-sm text-gray-700">
-      <div>
-        회사: <span class="font-medium">{{ companyLabel || '—' }}</span>
-        <span v-if="companyCode" class="ml-1 text-xs text-gray-500">({{ companyCode }})</span>
-      </div>
-      <div>
-        직무: <span class="font-medium">{{ jobLabel || '—' }}</span>
-        <span v-if="jobCode" class="ml-1 text-xs text-gray-500">({{ jobCode }})</span>
-      </div>
-    </div>
-
-    <!-- 템플릿 섹션 헤더 & 액션 -->
-    <div class="flex items-center justify-between">
-      <h2 class="text-lg font-medium">추천 템플릿</h2>
-      <div class="flex gap-2">
-        <AppButton size="sm" variant="ghost" @click="reloadTemplates">템플릿 다시 불러오기</AppButton>
-        <!-- 전역 CTA: 템플릿이 비어도 생성 시작 가능 -->
-        <AppButton size="sm" variant="secondary" @click="startGenerated" :disabled="!canStart">
-          Generated 스타일로 바로 시작
+  <div class="space-y-10">
+    <!-- 상단: 현재 선택 요약 + 액션 -->
+    <div class="space-y-6">
+      <div class="flex items-start justify-between">
+        <h1 class="text-2xl font-semibold">실시간 JD 생성 (비어있는 경우 직무 변경 선택)</h1>
+        <AppButton size="sm" :disabled="!canStart || running" @click="startNow">
+          생성
         </AppButton>
-        <AppButton size="sm" @click="startDefault" :disabled="!canStart">
-          기본(일반적) 스타일로 시작
-        </AppButton>
+      </div>
+
+      <div class="rounded border bg-white p-3 text-sm text-gray-700">
+        <div>
+          회사: <span class="font-medium">{{ companyLabel || '—' }}</span>
+          <span v-if="companyCode" class="ml-1 text-xs text-gray-500">({{ companyCode }})</span>
+        </div>
+        <div>
+          직무: <span class="font-medium">{{ jobLabel || '—' }}</span>
+          <span v-if="jobCode" class="ml-1 text-xs text-gray-500">({{ jobCode }})</span>
+        </div>
       </div>
     </div>
 
-    <!-- ① 로딩 스켈레톤 -->
-    <div v-if="loading" class="grid gap-4 md:grid-cols-2">
-      <div class="h-32 animate-pulse rounded-lg border bg-white"></div>
-      <div class="h-32 animate-pulse rounded-lg border bg-white"></div>
-    </div>
-
-    <!-- ② 템플릿 카드 -->
-    <div v-else-if="visibleTemplates.length" class="grid gap-4 md:grid-cols-2">
-      <TemplateStreamCard
-        v-for="(t, idx) in visibleTemplates"
-        :key="t.id"
-        :template="t"
-        :delay="idx * 250"
-        :speed="16"
-        @select="startWith(t)"
-        @preview="preview(t)"
-      />
-    </div>
-
-    <!-- ③ 빈 상태: 버튼이 사라지지 않도록 명확한 CTA 제공 -->
-    <div v-else class="rounded-lg border bg-white p-6 text-center text-sm">
-      <p class="text-gray-700">표시할 템플릿이 없습니다.</p>
-      <div class="mt-3 flex flex-wrap items-center justify-center gap-2">
-        <AppButton size="sm" variant="ghost" @click="reloadTemplates">템플릿 다시 불러오기</AppButton>
-        <AppButton size="sm" variant="secondary" @click="startGenerated" :disabled="!canStart">
-          Generated 스타일로 바로 시작
-        </AppButton>
-        <AppButton size="sm" @click="startDefault" :disabled="!canStart">
-          기본(일반적) 스타일로 시작
-        </AppButton>
+    <!-- 섹션: 실시간 생성 JD -->
+    <section class="space-y-3">
+      <div class="flex items-center justify-between">
+        <h2 class="text-lg font-medium">
+          JD 템플릿 ({{ companyLabel || companyCode || '—' }} · {{ jobLabel || jobCode || '—' }})
+        </h2>
+         <AppButton
+           size="sm"
+           variant="ghost"
+           @click="refetchInstant"
+           :disabled="!started || !companyCode || !jobCode"
+         >
+           다시 가져오기
+         </AppButton>
       </div>
-      <p v-if="!canStart" class="mt-2 text-xs text-amber-600">
-        우측 상단 <b>직무 변경</b>에서 회사·직무를 선택해주세요.
-      </p>
-    </div>
 
-    <!-- 진행 상태 & 실시간 미리보기 -->
-    <ProgressBar v-if="status !== 'idle'" :status="status" />
-    <section v-if="content" class="rounded-lg border bg-white p-4 shadow-sm">
-      <h2 class="mb-2 font-medium">실시간 생성 미리보기</h2>
-      <pre class="whitespace-pre-wrap">{{ content }}</pre>
+      <!-- 로딩 스켈레톤 -->
+      <div v-if="latestLoading" class="grid gap-4 md:grid-cols-3">
+        <div class="h-40 animate-pulse rounded-lg border bg-white"></div>
+        <div class="h-40 animate-pulse rounded-lg border bg-white"></div>
+        <div class="h-40 animate-pulse rounded-lg border bg-white"></div>
+      </div>
+
+      <!-- 카드들 -->
+      <div v-else-if="latestVisible.length" class="grid gap-4 md:grid-cols-3">
+          <JDStreamCard
+            v-for="(it, idx) in latestVisible"
+            :key="it.id"
+            :item="it"
+            :delay="idx * 250"
+            :speed="24"
+            :instant="instantRender"
+          />
+        </div>
+
+      <!-- 빈 상태 -->
+      <div v-else class="rounded-lg border bg-white p-6 text-center text-sm text-gray-600">
+        실시간 생성된 JD가 아직 없습니다.
+        <span class="ml-1">상단의 <b>생성</b> 버튼으로 시작하세요.</span>
+      </div>
     </section>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import AppButton from '@/components/common/AppButton.vue'
-import TemplateStreamCard from '@/components/generation/TemplateStreamCard.vue'
 import ProgressBar from '@/components/generation/ProgressBar.vue'
+import JDStreamCard from '@/components/generation/JDStreamCard.vue'
+
 import { useGenerationStore } from '@/store/generation'
 import { useCatalogStore } from '@/store/catalog'
-import { getJDTemplates } from '@/api/backend'
-import type { JDTemplate } from '@/api/types'
 
+import { getLatestJDs } from '@/api/backend'
+import type { JDListItem } from '@/api/types'
+
+/* ---------------- 선택/스토어 ---------------- */
 const route = useRoute()
 const gen = useGenerationStore()
 const catalog = useCatalogStore()
 
-// 쿼리 우선 복원
 const qCompany = (route.query.company_code as string) || ''
 const qJob = (route.query.job_code as string) || ''
 
-// 표시용
 const companyLabel = computed(() => catalog.companyLabel)
 const jobLabel = computed(() => catalog.jobLabel)
 const companyCode = computed(() => catalog.selectedCompany?.company_code || '')
 const jobCode = computed(() => catalog.selectedJob?.job_code || '')
 const canStart = computed(() => !!(companyCode.value && jobCode.value))
 
-// 생성 상태
+/* ---------------- 생성 상태 ---------------- */
 const status = computed(() => gen.status)
 const content = computed(() => gen.content)
+const running = computed(() => gen.status === 'queue' || gen.status === 'streaming')
 
-// 템플릿 로딩
-const loading = ref(true)
-const fetchedTemplates = ref<JDTemplate[]>([])
-const visibleTemplates = ref<JDTemplate[]>([])
+/* ---------------- 시작 여부 & 퍼시스트 키 ---------------- */
+const started = ref(false)
+const persistKey = computed(() => (companyCode.value && jobCode.value) ? `${companyCode.value}::${jobCode.value}` : '')
+const LS_STARTED = (key: string) => `jd_started:${key}`
+const LS_CONTENT = (key: string) => `jd_live_content:${key}`
 
-async function fetchTemplates() {
-  loading.value = true
-  visibleTemplates.value = []
-  fetchedTemplates.value = await getJDTemplates({
+/* ---------------- 실시간 생성 JD(사전 생성본) ---------------- */
+const latestLoading = ref(false) // 초기 자동 로드 금지
+const latestFetched = ref<JDListItem[]>([])
+const latestVisible = ref<JDListItem[]>([])
+const instantRender = ref(false) // true면 즉시 전체 출력
+
+async function fetchLatest(opts?: { instant?: boolean }) {
+  if (!started.value) return
+  latestLoading.value = true
+  latestVisible.value = []
+  latestFetched.value = []
+  instantRender.value = !!opts?.instant
+
+  const list = await getLatestJDs({
     company_code: companyCode.value,
     job_code: jobCode.value,
-    limit: 4
+    limit: 3
   })
-  loading.value = false
 
-  // 스트리밍처럼 하나씩 등장
+  latestFetched.value = list
+  latestLoading.value = false
+
+  if (instantRender.value) {
+    // 즉시 한 번에 렌더
+    latestVisible.value = [...latestFetched.value]
+    return
+  }
+
+  // 스트리밍 연출: 300ms 간격으로 하나씩 추가
   let i = 0
   const id = setInterval(() => {
-    if (i < fetchedTemplates.value.length) {
-      visibleTemplates.value.push(fetchedTemplates.value[i++])
+    if (i < latestFetched.value.length) {
+      latestVisible.value.push(latestFetched.value[i++])
     } else {
       clearInterval(id)
     }
-  }, 350)
+  }, 0)
 }
 
-function reloadTemplates() {
-  fetchTemplates().catch(() => {})
+/* ---------------- 시작 액션 ---------------- */
+function startNow() {
+  if (!canStart.value || running.value) return
+  started.value = true
+  // 시작 플래그를 저장(복원용)
+  if (persistKey.value) localStorage.setItem(LS_STARTED(persistKey.value), '1')
+
+  // 시작과 동시에 사전 생성본을 스트리밍처럼 노출
+  fetchLatest({ instant: false })
+
+  // 생성 스타일 우선 → 실패 시 기본('일반적')로 폴백
+  try {
+    gen.startGenerate({
+      provider: 'openai',
+      model: 'gpt-4o-mini',
+      language: 'ko',
+      company_code: companyCode.value,
+      job_code: jobCode.value,
+      style_source: 'generated'
+    })
+  } catch {
+    gen.startGenerate({
+      provider: 'openai',
+      model: 'gpt-4o-mini',
+      language: 'ko',
+      company_code: companyCode.value,
+      job_code: jobCode.value,
+      style_source: 'default',
+      default_style_name: '일반적'
+    })
+  }
 }
 
-onMounted(async () => {
-  // 선택 복원
-  await catalog.initFromCodes(qCompany, qJob)
-  // 템플릿 로드
-  await fetchTemplates()
+/* ---------------- 재조회 버튼: 카드 없으면 즉시, 있으면 스트리밍 ---------------- */
+async function refetchInstant() {
+  await fetchLatest({ instant: true })
+}
+
+/* ---------------- 퍼시스트(페이지 이탈 후 복원) ---------------- */
+// content를 회사·직무 키로 저장(마크다운 전문 유지)
+watch(content, (md) => {
+  if (!persistKey.value || !started.value) return
+  localStorage.setItem(LS_CONTENT(persistKey.value), JSON.stringify({
+    markdown: md || '',
+    company_code: companyCode.value,
+    job_code: jobCode.value,
+    created_at: new Date().toISOString()
+  }))
 })
 
-// 시작 함수들
-function startWith(t: JDTemplate) {
-  if (!canStart.value) return
-  gen.startGenerate({
-    provider: 'openai',
-    model: 'gpt-4o-mini',
-    language: 'ko',
-    company_code: companyCode.value,
-    job_code: jobCode.value,
-    style_source: t.source === 'preset' ? 'default' : 'generated',
-    default_style_name: t.source === 'preset' ? t.name : undefined
-  })
-}
-function startGenerated() {
-  if (!canStart.value) return
-  gen.startGenerate({
-    provider: 'openai',
-    model: 'gpt-4o-mini',
-    language: 'ko',
-    company_code: companyCode.value,
-    job_code: jobCode.value,
-    style_source: 'generated'
-  })
-}
-function startDefault() {
-  if (!canStart.value) return
-  gen.startGenerate({
-    provider: 'openai',
-    model: 'gpt-4o-mini',
-    language: 'ko',
-    company_code: companyCode.value,
-    job_code: jobCode.value,
-    style_source: 'default',
-    default_style_name: '일반적' // 필요시 'Notion' 등으로 교체
-  })
+// 진입 시: 이전 세션에 시작 이력이 있고 저장된 마크다운이 있으면 카드로 복원
+function hydrateFromPersisted() {
+  if (!persistKey.value) return
+  const wasStarted = localStorage.getItem(LS_STARTED(persistKey.value)) === '1'
+  if (!wasStarted) return
+
+  const raw = localStorage.getItem(LS_CONTENT(persistKey.value))
+  if (!raw) { started.value = true; return } // 시작 이력만 남았을 수도 있음
+
+  try {
+    const saved = JSON.parse(raw) as { markdown: string; company_code: string; job_code: string; created_at: string }
+    if (saved?.markdown) {
+      started.value = true
+      latestVisible.value = [{
+        id: -Date.now(), // 로컬 복원용 가짜 ID
+        company_code: saved.company_code,
+        job_code: saved.job_code,
+        title: '이전 세션에서 생성됨',
+        markdown: saved.markdown,
+        created_at: saved.created_at || new Date().toISOString()
+      }]
+      latestLoading.value = false
+      instantRender.value = true // 복원 시 즉시 출력
+    }
+  } catch { /* noop */ }
 }
 
-// 옵션: 미리보기 모달 등
-function preview(t: JDTemplate) {
-  // eslint-disable-next-line no-console
-  console.log('preview template', t)
-}
+/* ---------------- 라이프사이클 ---------------- */
+onMounted(async () => {
+  await catalog.initFromCodes(qCompany, qJob)
+  // 자동 fetch 금지. 대신 과거 세션 내용이 있으면 복원만 수행.
+  hydrateFromPersisted()
+})
+
+// 회사/직무 변경 시: 시작 이력이 있으면 해당 키 기준으로 복원 또는 재조회
+watch([companyCode, jobCode], async ([c, j], [pc, pj]) => {
+  if (c && j && (c !== pc || j !== pj)) {
+    latestVisible.value = []
+    latestFetched.value = []
+    latestLoading.value = false
+    started.value = false
+    hydrateFromPersisted()
+  }
+})
 </script>

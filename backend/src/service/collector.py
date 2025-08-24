@@ -88,7 +88,7 @@ async def crawl_jobkorea_and_store(
         "crawl.start source=%s company_id=%s company_code=%s job_code=%s max_details=%s list_params=%s",
         SOURCE,
         company_id,
-        company_code,
+        "???",
         job_code,
         max_details,
         list_params,
@@ -126,7 +126,10 @@ async def crawl_jobkorea_and_store(
                 url = _derive_url(item, detail)
                 title = _derive_title(item, detail)
                 meta_payload = _build_basic_meta(item, detail) if save_meta else None
-
+                if meta_detail := meta_payload.get("detail", None):
+                    company_code = meta_detail.get("company", None)
+                else:
+                    company_code = f"unknown:{jid}"
                 jd_id = await raw_repo.upsert_by_job_id(
                     source=SOURCE,
                     company_code=company_code,
