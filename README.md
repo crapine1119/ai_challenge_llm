@@ -188,18 +188,124 @@ backend/
 
 
 * 테스트
-  > curl http://localhost:8000/healthz \
-  > curl -X POST "http://localhost:8000/collect/jobkorea" \
-  > -H "Content-Type: application/json" \
-  > -d '{"company_id":1517115,"company_code":"jobkorea","job_code": "1000230", "max_details": 5}'
+curl http://localhost:8000/healthz
+
+* 스크립트
+
+curl -X POST "http://localhost:8000/api/collect/jobkorea" \
+  -H "Content-Type: application/json" \
+    -d '{"company_id":1517115,"company_code":"jobkorea","job_code":"1000242","max_details":5}'
+
+
+curl -X POST "http://localhost:8000/api/company-analysis/analyze" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "company_code":"jobkorea",
+    "job_code":"1000242",
+    "language":"ko",
+    "provider":"openai",
+    "model":"gpt-4o-mini",
+    "json_format": true
+  }'
+
+curl -X POST "http://localhost:8000/api/company-analysis/analyze" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "company_code":"jobkorea",
+    "job_code":"1000242",
+    "language":"ko",
+    "provider":"gemini",
+    "model":"gemini-2.5-flash",
+    "json_format": true
+  }'
+
+
+* 스크립트 v2
+
+** 회사 분석(원샷):
+curl -X POST "http://localhost:8000/api/company-analysis/analyze" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "company_code":"jobkorea",
+    "job_code":"1000242",
+    "language":"ko",
+    "provider":"openai",
+    "model":"gpt-4o-mini",
+    "json_format": true,
+    "save": true
+  }'
+
+** 지식만:
+curl -X POST "http://localhost:8000/api/company-analysis/knowledge" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "company_code":"jobkorea",
+    "job_code":"1000242",
+    "language":"ko",
+    "provider":"gemini",
+    "model":"gemini-2.5-flash",
+    "json_format": true
+  }'
+
+
+** 스타일만:
+curl -X POST "http://localhost:8000/api/company-analysis/style" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "company_code":"jobkorea",
+    "job_code":"1000242",
+    "language":"ko",
+    "provider":"openai",
+    "model":"gpt-4o-mini",
+    "json_format": true
+  }'
+
+** JD 생성(생성 스타일 우선 사용, 없으면 기본으로 폴백):
+curl -X POST "http://localhost:8000/api/jd/generate" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "company_code":"jobkorea",
+    "job_code":"1000242",
+    "language":"ko",
+    "provider":"openai",
+    "model":"gpt-4o-mini",
+    "style_source":"generated",
+    "default_style_name":"일반적"
+  }'
+
+
+** JD 생성(프리셋만 사용):
+curl -X POST "http://localhost:8000/api/jd/generate" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "company_code":"jobkorea",
+    "job_code":"1000242",
+    "style_source":"default",
+    "default_style_name":"Notion"
+  }'
+
+
+** JD 생성(지식/스타일 직접 주입):
+curl -X POST "http://localhost:8000/api/jd/generate" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "company_code":"jobkorea",
+    "job_code":"1000242",
+    "knowledge_override": { "requirements": { "competencies": ["문제해결"] }, "preferred": {}, "extras": {} },
+    "style_override": { "style_label": "간결", "tone_keywords": [], "section_outline": [], "templates": {} }
+  }'
+
+
 
 ---
 이제 해야되는 일
-[] llm 호출 코드
-[] company analysis (정보 없이 job만 가지고도 생성하는게 가능해야함)
-[] jd generation (사전 템플릿을 지정해놓을 것)
+[x] llm 호출 코드
+[x] company analysis (정보 없이 job만 가지고도 생성하는게 가능해야함)
+[x] jd generation (사전 템플릿을 지정해놓을 것)
 [] 간단한 프론트
 
 기타
-[] egg-info 지우기
-[] generated_skills db는 삭제
+[x] egg-info 지우기
+[x] generated_skills db는 삭제
+
+

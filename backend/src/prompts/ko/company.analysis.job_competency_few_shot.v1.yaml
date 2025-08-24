@@ -52,19 +52,11 @@ messages:
       # 예시
       {{
         "introduction": "AI팀은 모델 서비스/플랫폼화를 담당합니다.",
-        "culture": "적극적이고 소통을 중시하며 ...",
-        "values": ["고객집착", "빠른실행"],
+        "culture": {zeroshot_culture},
+        "values": {zeroshot_values},
         "ideal_traits": [],
-        "requirements": {{
-          "competencies": ["문제정의", "커뮤니케이션", ...],
-          "skills": ["PyTorch", "Docker", ...],
-          "project_experience": ["모델 서빙 경험", ...]
-        }},
-        "preferred": {{
-          "competencies": [],
-          "skills": ["Huggingface", "Langgraph", ...],
-          "project_experience": ["프로덕트 운영 경험", ...]
-        }},
+        "requirements": {zeroshot_requirements},
+        "preferred": {zeroshot_preferred},
         "extras": {{
           "benefits": ["재택 가능", "식대 지원"],
           "locations": ["서울 ..."],
@@ -77,4 +69,4 @@ params:
   temperature: 0.3
   max_output_tokens: 8192
 json_schema_key: company_knowledge_v1
-required_vars: ["company_name", "job_name", "concatenated_jds"]
+required_vars: ["company_name", "job_name", "concatenated_jds", "zeroshot_culture", "zeroshot_values", "zeroshot_requirements", "zeroshot_preferred"]

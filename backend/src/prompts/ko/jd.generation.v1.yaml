@@ -2,37 +2,56 @@ key: jd.generation
 version: v1
 language: ko
 prompt_type: chat
+
+# ✅ JD 생성은 문자열(Markdown)로 받습니다. JSON 출력 금지!
 messages:
   - role: system
     content: |
       너는 잡코리아의 HR Agent이며, HR Manager에게 도움이 되는 내용을 생성해야한다.
       절대로 폭력적이거나 (욕설), 개인정보 또는 차별 (성별, 연봉 등)이 될만한 내용들은 생성하면 안된다.
+
   - role: user
     content: |
-      너는 채용공고 카피라이터다. 제공된 회사 지식(overview/문화/요건)과 JD 스타일(톤/섹션/예시)을 결합해
-      최종 JD를 Markdown으로 작성한다.
-      원칙:
-      - 스타일의 tone_keywords와 section_outline를 우선 반영한다.
-      - 회사의 가치/문화/우대사항을 자연스럽게 녹인다.
-      - 중복/장황한 표현은 제거하고, 명확한 불릿을 사용한다.
-      - 표/리스트/서브헤더 등 Markdown 구조를 적극 활용하라.
-    
-      회사: {company_name}
-      직무: {job_name}
+      너는 한국어 직무 기술서를 작성하는 {company_name}의 전문적인 인사 담당자이다.      
+      너의 목표는 <직무명>과 <CompanyKnowledge>의 정보를 참고하여, <CompanyJDStyle>의 형식에 맞는 Job Description을 생성하는 것이다. 
+      <작성 규칙>을 참고하여 JD를 생성해라.
 
-      [회사 지식 JSON]
-      ```json
+      <회사명> {company_name} </회사명>
+      <직무명>: {job_name} </직무명>
+
+      <직무 관련 정보>
+      - CompanyKnowledge(JSON): 회사 소개/문화/가치/인재상, 필수/우대 요건, 부가 정보(복리후생/위치/전형).
+      - CompanyJDStyle(JSON): style_label(스타일 요약), tone_keywords(생성할 문체), section_outline(섹션명), templates(섹션별 문장 템플릿).
+      </직무 관련 정보>
+
+      <작성 규칙>
+      - 제공된 "section_outline" 순서를 그대로 따른다. 없다면 기본 섹션을 사용한다:
+        ["회사 소개", "팀 소개", "주요 업무", "자격 요건", "우대 사항", "기술/도구", "채용 절차"]
+      - 헤더, 불릿, 말투는 "style_label"과 "tone_keywords"에 맞게 생성한다.      
+      - "templates"에 "section_outline" key가 있다면:
+        value를 2~5개 문장으로 자연스럽게 확장해라.
+      - 정보가 부족한 섹션은 공백으로 두지 말고 해당 직무에 일반적으로 통용되는 문구를 생성해라.
+      - 회사명, 직무명을 자연스럽게 등장시켜 맥락을 강화하라.
+      - 최상단은 Title로 시작한다.
+      - 결과는 반드시 Markdown 형식을 따라야 한다.
+      </작성 규칙>
+
+      <CompanyKnowledge>
       {company_knowledge}
-      ```
+      </CompanyKnowledge>
 
-      [JD 스타일 JSON]
-      ```json
+      <CompanyJDStyle>
       {jd_style}
-      ```
+      </CompanyJDStyle>
 
-      위 정보를 반영해 완성도 높은 채용공고를 Markdown으로 작성하라.
-      후보자가 바로 지원할 수 있도록 역할/책임/자격요건/우대사항/복리후생/전형절차를 명확히 제시하라.
+      {company_name} JD:
 params:
-  temperature: 0.3
-  max_output_tokens: 4096
-required_vars: ["company_name", "job_name", "company_knowledge", "jd_style"]
+  temperature: 0.7
+  # 필요 시 공급자별로 무시되는 키는 그냥 넘어갑니다.
+  max_output_tokens: 16000
+
+required_vars:
+  - company_name
+  - job_name
+  - company_knowledge
+  - jd_style

@@ -156,6 +156,7 @@ class OpenAIAsyncLLM(LLMClient):
         if json_schema and want_json and self.provider == "openai":
             kwargs["response_format"] = {"type": "json_object"}
 
+        logging.info(f"[LLM Request]\nSystem:\n{sys_text}\n---\nUser:\n{prompt}")
         resp = await self._cli.chat.completions.create(**kwargs)
 
         text = ""

@@ -237,12 +237,12 @@ VALUES
   ), TRUE),
   ('Notion', jsonb_build_object(
     'style_label', 'Notion',
-    'tone_keywords', jsonb_build_array('트렌디','친화적','심플'),
+    'tone_keywords', jsonb_build_array('트렌디','친화적','이모티콘'),
     'section_outline', jsonb_build_array('About Us','Team','What you will do','What we look for','Nice to have','Process'),
     'templates', jsonb_build_object(
-      'About Us', '우리는 사용자에게 최고의 경험을 제공합니다.',
-      'What you will do', '• 이렇게 일해요\n• 이렇게 협업해요',
-      'What we look for', '• 이런 분을 찾아요'
+      'About Us', '우리는 사용자에게 최고의 경험을 제공합니다!',
+      'What you will do', '💻 이렇게 일해요\n🤝 이렇게 협업해요',
+      'What we look for', '🧐 이런 분을 찾아요'
     )
   ), TRUE)
 ON CONFLICT (style_name) DO NOTHING;
@@ -272,3 +272,51 @@ CREATE TABLE IF NOT EXISTS generated_styles (
 
 CREATE INDEX IF NOT EXISTS ix_gstyles_company_job
   ON generated_styles (company_code, job_code, created_at DESC);
+
+
+-- =========================================
+-- 테이블: generated_jds (최종 JD 저장소)
+-- =========================================
+CREATE TABLE IF NOT EXISTS generated_jds (
+  id            BIGSERIAL PRIMARY KEY,
+  company_code  TEXT NOT NULL,
+  job_code      TEXT NOT NULL,
+  title         TEXT,
+  jd_markdown   TEXT NOT NULL,
+  sections      JSONB,
+  meta          JSONB NOT NULL DEFAULT '{}'::jsonb, -- style_label, tone_keywords 등 요약
+  provider      TEXT,                                -- openai / gemini ...
+  model_name    TEXT,
+  prompt_key    TEXT,                                -- 사용 프롬프트(denorm)
+  prompt_version TEXT,
+  prompt_language TEXT,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- FK: generated_jds.job_code -> job_code_map(job_code)
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+      FROM pg_constraint c
+      JOIN pg_class t ON t.oid = c.conrelid
+     WHERE c.conname = 'fk_gjd_jobcode'
+       AND t.relname = 'generated_jds'
+  ) THEN
+    ALTER TABLE generated_jds
+      ADD CONSTRAINT fk_gjd_jobcode
+      FOREIGN KEY (job_code) REFERENCES job_code_map(job_code)
+      ON DELETE SET NULL;
+  END IF;
+END $$;
+
+-- generated_jds : 스타일 선택 정보 보강
+ALTER TABLE generated_jds
+  ADD COLUMN IF NOT EXISTS style_source TEXT,              -- 'generated' | 'default' | 'override'
+  ADD COLUMN IF NOT EXISTS style_preset_name TEXT,         -- default 프리셋명 (style_source='default'일 때)
+  ADD COLUMN IF NOT EXISTS style_snapshot_id BIGINT        -- 생성 스냅샷 ID (style_source='generated'일 때)
+    REFERENCES generated_styles(id) ON DELETE SET NULL;
+
+CREATE INDEX IF NOT EXISTS ix_gjd_style_snapshot_id ON generated_jds (style_snapshot_id);
+CREATE INDEX IF NOT EXISTS ix_gjd_company_job ON generated_jds (company_code, job_code, created_at DESC);
+CREATE INDEX IF NOT EXISTS ix_gjd_created ON generated_jds (created_at DESC);

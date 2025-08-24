@@ -27,16 +27,16 @@ messages:
       # 결과 형식
       {{
         "section_outline": List[str],    ## 공통된 템플릿 섹션
-        "templates": Dict[str, str],    ## 템플릿 key, value 
-        "tone_keywords": List[str],    ## 공통된 톤
+        "tone_keywords": List[str],    ## 공통된 톤 (문체)
+        "templates": Dict[str, str],    ## 템플릿 key (섹션), value (톤에 맞는 어투를 짧게 한문장으로 설명)
         "style_label": str,    ## 간단한 스타일 요약 
       }}
       
       # 예시
       {{
         "section_outline": ["About Us", "Responsibilities", "Qualifications", ...],
-        "templates": {{"About Us": "We are..."}},
-        "tone_keywords": ["자유로운", "도전적인", ...],
+        "tone_keywords": ["격식있는", "친근한 말투", "이모티콘", ...],
+        "templates": {{"About Us": "친근한 이모티콘을 포함한 인삿말을 작성하세요", ...}},
         "style_label": "스타트업-친근한",
       }}
       

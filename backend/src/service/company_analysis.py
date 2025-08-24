@@ -1,6 +1,8 @@
 import logging
 from typing import Optional, Dict, Any, List
 
+from sqlalchemy import text
+
 from domain.company_analysis.models import CompanyKnowledge, CompanyJDStyle
 from infrastructure.db.database import get_session
 from infrastructure.db.repository import (
@@ -166,6 +168,35 @@ class CompanyAnalysisService:
         logger.info("\tZero-shot knowledge: done")
         return model
 
+    async def _load_zeroshot_knowledge(self, *, job_code: str) -> Optional[CompanyKnowledge]:
+        """
+        Zero-shot(글로벌) CompanyKnowledge 최신 스냅샷을 불러온다.
+        저장 포맷: generated_insights.analysis_json = {"type":"company_knowledge_v1","payload":{...}}
+        """
+        async for session in get_session():
+            q = text(
+                """
+                SELECT analysis_json
+                  FROM generated_insights
+                 WHERE company_code = :g
+                   AND job_code     = :j
+                   AND analysis_json->>'type' = 'company_knowledge_v1'
+              ORDER BY generated_date DESC
+                 LIMIT 1
+                """
+            )
+            row = (await session.execute(q, {"g": GLOBAL_COMPANY, "j": job_code})).first()
+            if not row:
+                return None
+
+            try:
+                payload = (row[0] or {}).get("payload") or {}
+                return CompanyKnowledge.model_validate(payload)
+            except Exception as e:
+                # payload 형식이 어긋나면 None으로 처리(로그만 남김)
+                logger.warning("invalid zero-shot knowledge payload for job_code=%s: %s", job_code, e)
+                return None
+
     async def extract_knowledge_few_shot(
         self,
         *,
@@ -189,7 +220,19 @@ class CompanyAnalysisService:
         )
         if not jd_samples:
             raise ValueError("Few-shot을 위한 JD 샘플이 없습니다. 먼저 크롤링 또는 기간/조건을 확인하세요.")
-        rendered = await self._render_extract(company_code, job_name, jd_samples, None, language)
+
+        zeroshot_knowledge = await self._load_zeroshot_knowledge(job_code=job_code)
+        zeroshot_knowledge_dict = zeroshot_knowledge.model_dump()
+        zeroshot_knowledge_input = {
+            "zeroshot_culture": zeroshot_knowledge_dict["culture"],
+            "zeroshot_values": zeroshot_knowledge_dict["values"],
+            "zeroshot_requirements": zeroshot_knowledge_dict["requirements"],
+            "zeroshot_preferred": zeroshot_knowledge_dict["preferred"],
+        }
+
+        rendered = await self._render_extract(
+            company_code, job_name, jd_samples, None, language, **zeroshot_knowledge_input
+        )
         logger.info("\tFew-shot knowledge: begin")
         result = await self._invoke_json(rendered, json_schema=COMPANY_KNOWLEDGE_JSON_SCHEMA, json_format=json_format)
         model = CompanyKnowledge.model_validate(result)
@@ -322,6 +365,7 @@ class CompanyAnalysisService:
         jd_samples: List[str],
         style_name: Optional[str],
         language: Optional[str],
+        **other_input_kwargs,
     ) -> Dict[str, Any]:
         concatenated = self._concat(jd_samples)
         # 스타일 매핑이 있으면 우선 사용, 없으면 기본 키 사용
@@ -334,6 +378,7 @@ class CompanyAnalysisService:
                 "company_name": company_code,
                 "job_name": job_name,
                 "concatenated_jds": concatenated,
+                **other_input_kwargs,
             },
         )
         return rendered

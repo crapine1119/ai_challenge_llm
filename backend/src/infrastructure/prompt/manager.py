@@ -93,7 +93,7 @@ async def render_by_key_version(
 
         # string 템플릿
         if p.prompt_type == "string":
-            tmpl_src = _jinja_to_langchain(p.template or "")
+            tmpl_src = p.template
             tmpl = PromptTemplate.from_template(tmpl_src)
             user_text = tmpl.format(**context)
             return PromptRenderResult(
@@ -110,8 +110,8 @@ async def render_by_key_version(
         if p.prompt_type == "chat":
             msgs = p.messages or []
             # Jinja 플레이스홀더를 LangChain 스타일로 변환
-            normalized = [(m["role"], _jinja_to_langchain(m["content"])) for m in msgs]
-            chat = ChatPromptTemplate.from_messages(normalized)
+            # normalized = [(m["role"], _jinja_to_langchain(m["content"])) for m in msgs]
+            chat = ChatPromptTemplate.from_messages(msgs)
             rendered_msgs = chat.format_messages(**context)
             serial = [{"role": m.type, "content": m.content} for m in rendered_msgs]
             system, user_text = _split_system_user_from_messages(serial)

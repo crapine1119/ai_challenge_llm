@@ -1,6 +1,8 @@
 # src/service/jd_generation.py
-
-from typing import Optional, Literal
+import json
+import re
+from typing import Literal
+from typing import Optional
 
 from domain.company_analysis.models import CompanyKnowledge, CompanyJDStyle
 from infrastructure.db.database import get_session
@@ -19,13 +21,13 @@ class JDGenerationService:
         self,
         *,
         company: str,
-        job: str,
-        source: Literal["generated", "default"] = "generated",
+        job_code: str,
+        source: Literal["generated", "default"] = "default",
         default_style_name: Optional[str] = None,
     ) -> CompanyJDStyle:
         async for session in get_session():
             if source == "generated":
-                snap = await StyleSnapshotRepository(session).latest_for(company_code=company, job_code=job)
+                snap = await StyleSnapshotRepository(session).latest_for(company_code=company, job_code=job_code)
                 if snap:
                     payload = {
                         "style_label": snap.style_label or "",
@@ -56,37 +58,48 @@ class JDGenerationService:
         *,
         company: str,
         job: str,
+        job_code: str,
         knowledge: CompanyKnowledge,
         jd_style: Optional[CompanyJDStyle] = None,
         # ↓ 선택 정책: 생성 스냅샷/기본 프리셋
-        style_source: Literal["generated", "default"] = "generated",
+        style_source: Literal["generated", "default"] = "default",
         default_style_name: Optional[str] = None,
         model: Optional[str] = None,
+        language: Optional[str] = "ko",  # ✅ 추가
     ) -> str:
         """
         CompanyKnowledge + (기본/생성 스타일) 기반 최종 JD 생성 (markdown)
         """
         style = jd_style or await self._resolve_style(
-            company=company, job=job, source=style_source, default_style_name=default_style_name
+            company=company,
+            job_code=job_code,
+            source=style_source,
+            default_style_name=default_style_name,
         )
 
         prompt_input = PromptTemplateInput(
-            prompt_key="jd.authoring.full",
+            prompt_key="jd.generation",
             prompt_version="v1",
-            language="ko",
+            language=language,
             variables={
                 "company_name": company,
                 "job_name": job,
-                "company_knowledge": knowledge.model_dump(mode="json"),
-                "jd_style": style.model_dump(mode="json"),
+                "company_knowledge": json.dumps(knowledge.model_dump(mode="json"), ensure_ascii=False, indent=2),
+                "jd_style": json.dumps(style.model_dump(mode="json"), ensure_ascii=False, indent=2),
             },
         )
         rendered = await self.prompt_manager.render_chat(prompt_input)
         response = await self.llm.invoke(
-            prompt=rendered["prompt"],
-            system=rendered.get("system_prompt"),
+            prompt=rendered["user_text"],
+            system=rendered.get("system"),
             model=model,
         )
         if not isinstance(response, str):
             raise ValueError("JD 생성 응답이 문자열이 아닙니다.")
+
+        if "```" in response:
+            response = re.sub(r"```markdown", "", response)
+            response = re.sub(r"```json", "", response)
+            response = re.sub(r"```", "", response)
+
         return response.strip()

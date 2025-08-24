@@ -13,20 +13,16 @@
   (없으면 0으로 폴백; InMemoryQueueRepo에는 구현 권장)
 """
 
-
 import asyncio
 from dataclasses import dataclass
 from typing import Any, Dict, Optional, Tuple, List
 
-from infrastructure.queue import (
-    QueueEngine,
-    InMemoryQueueRepo,
-    RoundRobinScheduler,
-    load_queue_config,
-    NoopQueueMetrics,
-    PrometheusQueueMetrics,
-)
+from infrastructure.queue.config import load_queue_config
+from infrastructure.queue.engine import QueueEngine
+from infrastructure.queue.metrics import NoopQueueMetrics, PrometheusQueueMetrics
 from infrastructure.queue.models import QueueItem
+from infrastructure.queue.repo import InMemoryQueueRepo
+from infrastructure.queue.scheduler import RoundRobinScheduler
 
 
 # --- 간단 EMA 도우미 -----------------------------------------------------------
@@ -63,8 +59,6 @@ class _EMAStore:
 
 
 # --- LLMQueueService 퍼사드 ----------------------------------------------------
-
-
 class LLMQueueService:
     """
     간단 라운드로빈 스케줄 + per-user/글로벌 동시성 제한.

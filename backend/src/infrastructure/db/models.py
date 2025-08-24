@@ -1,6 +1,17 @@
-# src/infrastructure/db/models.py
-from sqlalchemy import Boolean
-from sqlalchemy import Column, Integer, String, Text, Date, ForeignKey, JSON, TIMESTAMP, text, UniqueConstraint
+from sqlalchemy import (
+    Boolean,
+    Column,
+    Integer,
+    BigInteger,
+    String,
+    Text,
+    Date,
+    ForeignKey,
+    JSON,
+    TIMESTAMP,
+    text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import relationship
 
 from infrastructure.db.database import Base
@@ -113,3 +124,27 @@ class Prompt(Base):
     # ⚠️ 주의: SQLAlchemy의 UniqueConstraint는 함수표현을 허용하지 않습니다.
     # init.sql에서 이미 COALESCE 기반 고유 제약/인덱스를 생성하므로 ORM에선 별도 정의하지 않습니다.
     __table_args__ = ()
+
+
+class GeneratedJD(Base):
+    __tablename__ = "generated_jds"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    company_code = Column(Text, nullable=False)
+    job_code = Column(Text, ForeignKey("job_code_map.job_code", ondelete="SET NULL"), nullable=True)
+    title = Column(Text)
+    jd_markdown = Column(Text, nullable=False)
+    sections = Column(JSON, nullable=True)
+    meta = Column(JSON, nullable=False, server_default=text("'{}'::jsonb"))
+    provider = Column(Text, nullable=True)
+    model_name = Column(Text, nullable=True)
+    prompt_key = Column(Text, nullable=True)
+    prompt_version = Column(Text, nullable=True)
+    prompt_language = Column(Text, nullable=True)
+    created_at = Column(TIMESTAMP(timezone=True), server_default=text("NOW()"))
+
+    style_source = Column(Text)  # 'generated' | 'default' | 'override'
+    style_preset_name = Column(Text)  # default 프리셋명
+    style_snapshot_id = Column(BigInteger, ForeignKey("generated_styles.id", ondelete="SET NULL"))
+    # ✅ 단방향 relationship (반대편 속성 필요 없음)
+    job_code_ref = relationship("JobCode", lazy="joined")

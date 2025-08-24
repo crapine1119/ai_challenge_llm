@@ -1,13 +1,13 @@
 # src/infrastructure/db/repository.py
 from datetime import date, timedelta
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Dict, Any, List, Optional, Tuple, Sequence
 
-from sqlalchemy import select, func, update
+from sqlalchemy import func, update, select, desc, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from domain.company_analysis.models import CompanyJDStyle
-from infrastructure.db.models import GeneratedInsight, RawJobDescription, JDStyle, GeneratedStyle, JobCode
+from infrastructure.db.models import GeneratedInsight, RawJobDescription, JDStyle, GeneratedStyle, JobCode, GeneratedJD
 
 
 def build_style_digest_markdown(
@@ -83,6 +83,13 @@ def build_style_digest_markdown(
         text = text[:max_chars] + "\n\n<!-- truncated -->"
 
     return text or None
+
+
+async def load_job_name(session: AsyncSession, job_code: str) -> Optional[str]:
+    q = text("SELECT job_name FROM job_code_map WHERE job_code = :jc LIMIT 1")
+    res = await session.execute(q, {"jc": job_code})
+    row = res.first()
+    return None if not row else str(row[0])
 
 
 class RawJDRepository:
@@ -188,55 +195,43 @@ class GeneratedInsightRepository:
     def __init__(self, session: AsyncSession):
         self.session = session
 
-    async def add_analysis(
-        self,
-        *,
-        jd_id: int,
-        company_code: str,
-        job_code: str,
-        analysis_json: Optional[Dict[str, Any]] = None,
-    ) -> int:
-        """
-        # ⚠️ 이 메서드는 더 이상 'source_meta' 용도로 쓰지 않습니다.
-        #    (LLM 생성/추론 결과 전용으로 유지하거나, 필요 없으면 삭제)
-
-        단일 JD에 대한 '생성/추론' JSON 저장.
-        (원천 수집 메타는 raw_job_descriptions.meta_json에 저장)
-        """
-        row = GeneratedInsight(
-            jd_id=jd_id,
-            company_code=company_code,
-            job_code=job_code,
-            analysis_json=analysis_json,
+    async def latest_raw(self, *, company_code: str, job_code: str) -> Optional[Dict[str, Any]]:
+        q = text(
+            """
+            SELECT analysis_json
+              FROM generated_insights
+             WHERE company_code = :c
+               AND job_code = :j
+               AND analysis_json->>'type' = 'company_knowledge_v1'
+          ORDER BY generated_date DESC
+             LIMIT 1
+            """
         )
-        self.session.add(row)
-        await self.session.flush()
-        await self.session.commit()
-        return row.id
+        row = (await self.session.execute(q, {"c": company_code, "j": job_code})).first()
+        return None if not row else row[0]
 
-    async def add_generation_text(
-        self,
-        *,
-        jd_id: int,
-        company_code: str,
-        job_code: str,
-        llm_text: str,
-        analysis_json: Optional[Dict[str, Any]] = None,
-    ) -> int:
-        """
-        단일 JD에 대한 LLM 생성 텍스트(및 선택적 분석 JSON) 저장.
-        """
-        row = GeneratedInsight(
-            jd_id=jd_id,
-            company_code=company_code,
-            job_code=job_code,
-            llm_text=llm_text,
-            analysis_json=analysis_json,
+    async def latest_payload(self, *, company_code: str, job_code: str) -> Optional[Dict[str, Any]]:
+        raw = await self.latest_raw(company_code=company_code, job_code=job_code)
+        if not raw:
+            return None
+        payload = raw.get("payload")
+        return payload if isinstance(payload, dict) else None
+
+    async def latest_model(self, *, company_code: str, job_code: str):
+        # 지연 로딩: pydantic 의존은 런타임에 import
+        from domain.company_analysis.models import CompanyKnowledge  # type: ignore
+
+        payload = await self.latest_payload(company_code=company_code, job_code=job_code)
+        return None if payload is None else CompanyKnowledge.model_validate(payload)
+
+    async def exists(self, *, company_code: str, job_code: str) -> bool:
+        # 기존 GeneratedInsightRepository.has_company_knowledge 와 동일 의미
+        q = select(func.count(GeneratedInsight.id)).where(
+            GeneratedInsight.company_code == company_code,
+            GeneratedInsight.job_code == job_code,
+            GeneratedInsight.analysis_json["type"].astext == "company_knowledge_v1",
         )
-        self.session.add(row)
-        await self.session.flush()
-        await self.session.commit()
-        return row.id
+        return (await self.session.execute(q)).scalar_one() > 0
 
     async def add_company_knowledge(
         self,
@@ -384,3 +379,82 @@ class JobCodeRepository:
     async def list_all(self) -> List[Tuple[str, str]]:
         rows = (await self.session.execute(select(JobCode.job_code, JobCode.job_name))).all()
         return [(r[0], r[1]) for r in rows]
+
+
+class JDRepository:
+    def __init__(self, session: AsyncSession):
+        self.session = session
+
+    async def save_generated(
+        self,
+        *,
+        company_code: str,
+        job_code: str,
+        title: str,
+        markdown: str,
+        sections: Optional[List[Dict[str, Any]]] = None,
+        meta: Optional[Dict[str, Any]] = None,
+        provider: Optional[str] = None,
+        model_name: Optional[str] = None,
+        prompt_meta: Optional[Dict[str, Any]] = None,  # {key,version,language}
+        style_source: Optional[str] = None,  # 'generated' | 'default' | 'override'
+        style_preset_name: Optional[str] = None,
+        style_snapshot_id: Optional[int] = None,
+    ) -> int:
+        row = GeneratedJD(
+            company_code=company_code,
+            job_code=job_code,
+            title=title,
+            jd_markdown=markdown,
+            sections=sections,
+            meta=meta or {},
+            provider=provider,
+            model_name=model_name,
+            prompt_key=(prompt_meta or {}).get("key"),
+            prompt_version=(prompt_meta or {}).get("version"),
+            prompt_language=(prompt_meta or {}).get("language"),
+            style_source=style_source,
+            style_preset_name=style_preset_name,
+            style_snapshot_id=style_snapshot_id,
+        )
+        self.session.add(row)
+        await self.session.flush()
+        await self.session.commit()
+        return row.id
+
+    async def latest(self, *, company_code: str, job_code: str) -> Optional[GeneratedJD]:
+        q = (
+            select(GeneratedJD)
+            .where(
+                GeneratedJD.company_code == company_code,
+                GeneratedJD.job_code == job_code,
+            )
+            .order_by(desc(GeneratedJD.created_at))
+            .limit(1)
+        )
+        return (await self.session.execute(q)).scalars().first()
+
+    async def get(self, *, jd_id: int) -> Optional[GeneratedJD]:
+        q = select(GeneratedJD).where(GeneratedJD.id == jd_id).limit(1)
+        return (await self.session.execute(q)).scalars().first()
+
+    async def list(
+        self,
+        *,
+        company_code: Optional[str] = None,
+        job_code: Optional[str] = None,
+        limit: int = 20,
+        offset: int = 0,
+    ) -> tuple[int, Sequence[GeneratedJD]]:
+        base = select(GeneratedJD)
+        cnt = select(func.count(GeneratedJD.id))
+        if company_code:
+            base = base.where(GeneratedJD.company_code == company_code)
+            cnt = cnt.where(GeneratedJD.company_code == company_code)
+        if job_code:
+            base = base.where(GeneratedJD.job_code == job_code)
+            cnt = cnt.where(GeneratedJD.job_code == job_code)
+        base = base.order_by(desc(GeneratedJD.created_at)).offset(offset).limit(limit)
+        rows = (await self.session.execute(base)).scalars().all()
+        total = (await self.session.execute(cnt)).scalar_one()
+        return total, rows

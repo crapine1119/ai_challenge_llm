@@ -1,9 +1,9 @@
-from typing import Literal, Optional
+from datetime import datetime
+from typing import Optional, Literal, List, Dict, Any
 
 from pydantic import BaseModel, Field
 
 from api.schemas.common import LLMOptions
-from domain.company_analysis.models import CompanyKnowledge, CompanyJDStyle
 
 StyleSource = Literal["generated", "default"]
 
@@ -12,19 +12,35 @@ class JDGenerateRequest(LLMOptions):
     company_code: str
     job_code: str
     language: Optional[str] = "ko"
+    style_source: StyleSource = Field(default="default")
+    default_style_name: Optional[str] = None
 
-    # 어떤 스타일을 쓸지 선택
-    style_source: StyleSource = Field(default="generated", description='"generated"=생성 스냅샷, "default"=프리셋')
-    default_style_name: Optional[str] = Field(
-        default=None, description='style_source="default"일 때 사용할 프리셋 이름'
-    )
+    # 직접 주입도 유지(있으면 DB 조회 생략)
+    knowledge_override: Optional[Dict[str, Any]] = None
+    style_override: Optional[Dict[str, Any]] = None
 
-    # 직접 주입(옵션) — 있으면 DB 조회 대신 사용
-    knowledge_override: Optional[CompanyKnowledge] = None
-    style_override: Optional[CompanyJDStyle] = None
+
+# schemas/jd_generation.py
+class JDItem(BaseModel):
+    id: int
+    company_code: str
+    job_code: str
+    title: Optional[str]
+    markdown: str  # <- alias 제거
+    created_at: datetime
 
 
 class JDGenerateResponse(BaseModel):
     company_code: str
     job_code: str
     markdown: str
+    saved_id: int
+
+
+class JDGetResponse(JDItem):
+    pass
+
+
+class JDListResponse(BaseModel):
+    total: int
+    items: List[JDItem]
