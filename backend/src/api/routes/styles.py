@@ -14,6 +14,7 @@ from api.schemas.styles import (
 from domain.company_analysis.models import CompanyJDStyle
 from infrastructure.db.database import get_session
 from infrastructure.db.models import JDStyle, GeneratedStyle
+from infrastructure.db.repository import build_style_digest_markdown
 
 router = APIRouter(prefix="/styles", tags=["styles"])
 
@@ -35,13 +36,14 @@ async def list_presets(only_active: bool = Query(True, description="활성 프�
         for r in rows:
             payload = r.payload_json or {}
             # payload_json → CompanyJDStyle
+
             cjds = CompanyJDStyle.model_validate(
                 {
                     "style_label": payload.get("style_label") or r.style_name,
                     "tone_keywords": payload.get("tone_keywords") or [],
                     "section_outline": payload.get("section_outline") or [],
                     "templates": payload.get("templates") or {},
-                    "example_jd_markdown": payload.get("example_jd_markdown") or "",
+                    "example_jd_markdown": payload.get("example_jd_markdown") or build_style_digest_markdown(payload),
                 }
             )
             items.append(StylePresetItem(style_name=r.style_name, is_active=bool(r.is_active), style=cjds))

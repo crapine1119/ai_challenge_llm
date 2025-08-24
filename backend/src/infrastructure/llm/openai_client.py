@@ -42,7 +42,6 @@ def _normalize_chat_params(opts: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         "frequency_penalty",
         "stop",
         "max_tokens",  # OpenAI 스타일
-        "max_output_tokens",  # Gemini(OpenAI 호환) 스타일
         "seed",
         "logit_bias",
         "metadata",

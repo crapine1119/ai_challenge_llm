@@ -24,6 +24,7 @@ curl "http://localhost:8000/api/styles/generated?company_code=jobkorea&job_code=
 
 
 # Company Analysis
+
 ## zero shot
 curl -X POST "http://localhost:8000/api/company-analysis/knowledge/zero-shot" \
   -H "Content-Type: application/json" \
@@ -46,7 +47,6 @@ curl -X POST "http://localhost:8000/api/company-analysis/analyze-all" \
     "model":"gpt-4o",
     "json_format": true
   }'
-
 ## Option: few shot only
 curl -X POST "http://localhost:8000/api/company-analysis/knowledge/few-shot" \
   -H "Content-Type: application/json" \
@@ -231,3 +231,12 @@ curl -sS "http://localhost:8000/api/llm/queue/tasks/<TASK_ID>/event"
 curl -X POST "http://localhost:8000/api/guardrail/check" \
   -H "Content-Type: application/json" \
   -d '{"text": "이건 그냥 문장", "comment": "damn 같은 단어 포함"}'
+
+
+# 회사 목록
+curl "http://localhost:8000/api/catalog/companies/collected"
+# => {"companies":["jobkorea"]}
+
+# 직무 목록
+curl "http://localhost:8000/api/catalog/jobs/collected?company_code=jobkorea"
+# => {"company_code":"jobkorea","jobs":[{"code":"1000242","name":"AI/ML 엔지니어"}]}

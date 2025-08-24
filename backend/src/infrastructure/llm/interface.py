@@ -18,7 +18,7 @@ class LLMClient(Protocol):
         단발 호출.
         - json_schema가 주어지면 JSON(딕셔너리) 반환
         - 아니면 문자열 반환
-        - options: temperature, max_output_tokens, top_p, stop 등 생성 파라미터
+        - options: temperature, top_p, stop 등 생성 파라미터
         """
 
     async def stream(

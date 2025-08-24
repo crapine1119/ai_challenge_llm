@@ -1,3 +1,7 @@
+"""
+toy service to simulate delayed llm response situation
+"""
+
 import asyncio
 import json
 import logging

@@ -1,56 +1,87 @@
+// src/api/sse.ts
+import type { JDGenerateStreamStart, JDGenerateStreamEnd } from './types'
+
 export type SSEHandler = {
-  onStart?: (payload: any) => void
+  onStart?: (payload: JDGenerateStreamStart) => void
   onDelta?: (chunk: string) => void
-  onEnd?: (payload: any) => void
+  onEnd?: (payload: JDGenerateStreamEnd) => void
   onError?: (message: string) => void
+  onFirstToken?: () => void
 }
 
-export function connectSSE(url: string, body: any, handler: SSEHandler) {
+/** text/event-stream 수신용 유틸 */
+export async function connectSSE(url: string, body: any, handler: SSEHandler) {
   const full = new URL(url, (import.meta.env.VITE_API_BASE_URL as string) || 'http://localhost:8000').toString()
   const ctrl = new AbortController()
 
-  // SSE with fetch (text/event-stream)
-  fetch(full, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-    signal: ctrl.signal
-  }).then(async (res) => {
+  try {
+    const res = await fetch(full, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: ctrl.signal
+    })
     if (!res.ok || !res.body) {
       handler.onError?.(`HTTP ${res.status}`)
-      return
+      return () => ctrl.abort()
     }
+
     const reader = res.body.getReader()
     const decoder = new TextDecoder('utf-8')
     let buffer = ''
+    let firstDeltaSeen = false
+
     while (true) {
       const { value, done } = await reader.read()
       if (done) break
       buffer += decoder.decode(value, { stream: true })
 
-      // SSE event parsing
       const events = buffer.split('\n\n')
       buffer = events.pop() || ''
+
       for (const evt of events) {
         const lines = evt.split('\n')
         let event = 'message'
         let data = ''
+
         for (const l of lines) {
           if (l.startsWith('event:')) event = l.slice(6).trim()
           if (l.startsWith('data:')) data += l.slice(5).trim()
         }
+
         try {
           const payload = data ? JSON.parse(data) : null
-          if (event === 'start') handler.onStart?.(payload)
-          else if (event === 'delta') handler.onDelta?.(payload?.text ?? '')
-          else if (event === 'end') handler.onEnd?.(payload)
-          else if (event === 'error') handler.onError?.(payload?.message ?? 'error')
-        } catch (e) {
-          // 무시: 파싱 오류
+          switch (event) {
+            case 'start':
+              handler.onStart?.(payload as JDGenerateStreamStart)
+              break
+            case 'delta':
+              const text = (payload && (payload.text ?? payload.delta ?? '')) || ''
+              if (text) {
+                if (!firstDeltaSeen) {
+                  firstDeltaSeen = true
+                  handler.onFirstToken?.()
+                }
+                handler.onDelta?.(text)
+              }
+              break
+            case 'end':
+              handler.onEnd?.(payload as JDGenerateStreamEnd)
+              break
+            case 'error':
+              handler.onError?.((payload && payload.message) || 'error')
+              break
+            default:
+              break
+          }
+        } catch {
+          /* noop */
         }
       }
     }
-  }).catch((e) => handler.onError?.(String(e)))
+  } catch (e: any) {
+    handler.onError?.(String(e?.message || e))
+  }
 
   return () => ctrl.abort()
 }

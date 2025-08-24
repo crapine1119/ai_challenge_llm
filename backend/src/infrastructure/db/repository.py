@@ -2,12 +2,12 @@
 from datetime import date, timedelta
 from typing import Dict, Any, List, Optional, Tuple, Sequence
 
-from sqlalchemy import func, update, select, desc, text
+from sqlalchemy import func, update, desc, text, select, distinct
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from domain.company_analysis.models import CompanyJDStyle
-from infrastructure.db.models import GeneratedInsight, RawJobDescription, JDStyle, GeneratedStyle, JobCode, GeneratedJD
+from infrastructure.db.models import GeneratedInsight, JDStyle, GeneratedStyle, GeneratedJD, RawJobDescription, JobCode
 
 
 def build_style_digest_markdown(
@@ -458,3 +458,43 @@ class JDRepository:
         rows = (await self.session.execute(base)).scalars().all()
         total = (await self.session.execute(cnt)).scalar_one()
         return total, rows
+
+
+class CatalogRepository:
+    def __init__(self, session: AsyncSession):
+        self.session = session
+
+    async def distinct_companies(self) -> List[str]:
+        """
+        수집된 JD가 존재하는 company_code 목록(distinct, 정렬)
+        """
+        q = (
+            select(distinct(RawJobDescription.company_code))
+            .where(RawJobDescription.company_code.is_not(None))
+            .order_by(RawJobDescription.company_code.asc())
+        )
+        rows = (await self.session.execute(q)).all()
+        return [r[0] for r in rows if r and r[0]]
+
+    async def distinct_jobs_for_company(self, company_code: str) -> List[tuple[str, str]]:
+        """
+        특정 회사에서 수집된 job_code 목록과 이름.
+        이름은 job_code_map에서 조회, 없으면 code 자체를 name으로 설정.
+        """
+        # 1) 코드 목록
+        q_codes = (
+            select(distinct(RawJobDescription.job_code))
+            .where(
+                RawJobDescription.company_code == company_code,
+                RawJobDescription.job_code.is_not(None),
+            )
+            .order_by(RawJobDescription.job_code.asc())
+        )
+        codes = [r[0] for r in (await self.session.execute(q_codes)).all() if r and r[0]]
+        if not codes:
+            return []
+
+        # 2) 이름 매핑
+        q_names = select(JobCode.job_code, JobCode.job_name).where(JobCode.job_code.in_(codes))
+        mapping = {r[0]: r[1] for r in (await self.session.execute(q_names)).all() if r}
+        return [(c, mapping.get(c, c)) for c in codes]
