@@ -312,3 +312,14 @@ curl -X POST "http://localhost:8000/api/jd/generate" \
 [x] generated_skills db는 삭제
 
 
+---
+# frontend 환경
+# Node LTS 설치 (권장: 20.x 또는 22.x)
+# macOS/Linux (nvm)
+curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
+# 새 터미널 후
+nvm install --lts
+nvm use --lts
+
+npm install -D tailwindcss postcss autoprefixer
+npx tailwindcss init -p
