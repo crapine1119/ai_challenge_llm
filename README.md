@@ -20,6 +20,7 @@
 **! .env의 OPENAI_API_KEY에 api key를 반드시 등록해주세요** 
 
 ### Frontend
+(현재 버그가 있어 수정이 필요한 상황입니다. 백엔드는 정상적으로 작동합니다. 패키징 에러로 당일 저녁에 수정해서 다시 올리겠습니다.)
 1. macOS/Linux nvm: Node LTS 설치 (권장: 20.x 또는 22.x)\
    (이미 설치 되어있다면 넘어가셔도 됩니다.)
 > curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
