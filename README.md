@@ -15,7 +15,7 @@
 > curl -LsSf https://astral.sh/uv/install.sh | sh
 3. env 설정
 > cd backend \
-> cp .env.example .env \
+> cp .env.example .env
 
 **! .env의 OPENAI_API_KEY에 api key를 반드시 등록해주세요** 
 
