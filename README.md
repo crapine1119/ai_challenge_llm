@@ -14,7 +14,7 @@
 2. uv 설치
 > curl -LsSf https://astral.sh/uv/install.sh | sh
 3. env 설정
-> cd backend \
+> cd {project_root}/backend \
 > cp .env.example .env
 
 **! .env의 OPENAI_API_KEY에 api key를 반드시 등록해주세요** 
@@ -28,11 +28,12 @@
 2. 모듈 설치 (새로운 터미널에서 실행)
 > nvm install --lts \
 > nvm use --lts \
+> cd {project_root}/frontend \
 > npm install
 
 # 실행 방법 
 1. backend 실행
-> cd {project root} \
+> cd {project_root} \
 > chmod +x scripts/run_backend.sh \
 > scripts/run_backend.sh start
 
