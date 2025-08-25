@@ -153,71 +153,46 @@ const hasCompanies = (d: any): d is { companies: string[] } =>
 const hasJobs = (d: any): d is { company_code?: string; jobs: { code: string; name: string }[] } =>
   d && Array.isArray(d.jobs)
 
-/** 수집된 회사 목록 */
-export const getCollectedCompanies = async (limit = 500): Promise<CompanyBrief[]> => {
-  // 1) 실제 운영 엔드포인트: {"companies": ["jobkorea", ...]}
+// 회사 목록: 문자열 배열/다양한 키 조합 모두 흡수 → [{ company_code, company_name }]
+export const getCollectedCompanies = async (): Promise<CompanyBrief[]> => {
   try {
-    const r = await http.get('/api/catalog/companies/collected', { params: { limit } })
-    const data = r.data
-    if (hasCompanies(data)) {
-      return data.companies.map((code: string) => ({
-        company_code: code,
-        name: code // 사람이 읽을 이름이 없으므로 일단 code로 대체(추후 매핑 가능)
-      }))
-    }
-  } catch (_) {
-    // noop
-  }
-
-  // 2) 폴백: 통합 companies 엔드포인트 (SearchResponse<CompanyBrief> | CompanyBrief[])
-  try {
-    const r = await http.get<SearchResponse<CompanyBrief> | CompanyBrief[]>('/api/catalog/companies', { params: { limit } })
-    const data = r.data as any
-    if (Array.isArray(data)) {
-      return data
-    }
-    if (data && Array.isArray(data.items)) {
-      return data.items
-    }
+    const r = await http.get('/api/catalog/companies/collected');
+    const raw = (r.data?.companies ?? r.data ?? []) as any[];
+    return (raw ?? []).map((c: any) => {
+      if (typeof c === 'string') {
+        return { company_code: c, company_name: c };
+      }
+      return {
+        company_code: c.company_code ?? c.code ?? c.name ?? '',
+        company_name: c.company_name ?? c.name ?? c.code ?? c.company_code ?? '',
+      };
+    }).filter(x => x.company_code);
   } catch {
-    // noop
+    return [];
   }
+};
 
-  return []
-}
 
-/** 수집된 직무 목록(회사 선택 시 해당 회사 기준) */
-export const getCollectedJobsForCompany = async (company_code?: string, limit = 500): Promise<JobBrief[]> => {
-  // 1) 실제 운영 엔드포인트: {"company_code":"jobkorea","jobs":[{"code":"1000242","name":"AI/ML 엔지니어"}]}
+// 직무 목록: 어떤 형태여도 → [{ job_code, job_name }]
+export const getCollectedJobsForCompany = async (
+  company_code?: string,
+  limit = 500
+): Promise<JobBrief[]> => {
+  if (!company_code) return [];
   try {
-    const r = await http.get('/api/catalog/jobs/collected', { params: { company_code, limit } })
-    const data = r.data
-    if (hasJobs(data)) {
-      return data.jobs.map(j => ({
-        job_code: j.code,
-        name: j.name
-      }))
-    }
-  } catch (_) {
-    // noop
-  }
-
-  // 2) 폴백: 통합 jobs 엔드포인트 (SearchResponse<JobBrief> | JobBrief[])
-  try {
-    const r = await http.get<SearchResponse<JobBrief> | JobBrief[]>('/api/catalog/jobs', { params: { company_code, limit } })
-    const data = r.data as any
-    if (Array.isArray(data)) {
-      return data
-    }
-    if (data && Array.isArray(data.items)) {
-      return data.items
-    }
+    const r = await http.get('/api/catalog/jobs/collected', { params: { company_code, limit } });
+    const raw = (r.data?.jobs ?? r.data?.items ?? r.data ?? []) as any[];
+    return (Array.isArray(raw) ? raw : []).map((j: any) => {
+      if (typeof j === 'string') return { job_code: j, job_name: j };
+      return {
+        job_code: j.job_code ?? j.code ?? '',
+        job_name: j.job_name ?? j.name ?? j.code ?? j.job_code ?? '',
+      };
+    }).filter(x => x.job_code);
   } catch {
-    // noop
+    return [];
   }
-
-  return []
-}
+};
 
 
 export const getJDTemplates = async (params: { company_code?: string; job_code?: string; limit?: number }) => {

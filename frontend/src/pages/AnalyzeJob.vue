@@ -109,7 +109,7 @@
     </div>
 
     <!-- (옵션) 분석 로그 토글 -->
-    <details class="rounded border bg-white p-3 text-xs text-gray-700">
+    <details open @toggle="$event.target.open = true" class="rounded border bg-white p-3 text-xs text-gray-700">
       <summary class="cursor-pointer select-none text-sm font-medium">분석 로그</summary>
       <div class="mt-2 max-h-48 overflow-auto whitespace-pre-wrap">
         <div v-if="!analysisLog.length" class="text-gray-400">로그가 없습니다.</div>

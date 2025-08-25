@@ -248,5 +248,5 @@ curl "http://localhost:8000/api/catalog/companies/collected"
 # => {"companies":["jobkorea"]}
 
 # 직무 목록
-curl "http://localhost:8000/api/catalog/jobs/collected?company_code=jobkorea"
+curl "http://localhost:8000/api/catalog/jobs/collected?company_code=잡코리아(유)"
 # => {"company_code":"jobkorea","jobs":[{"code":"1000242","name":"AI/ML 엔지니어"}]}

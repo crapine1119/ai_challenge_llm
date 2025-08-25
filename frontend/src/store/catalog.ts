@@ -1,79 +1,119 @@
 // src/store/catalog.ts
 import { defineStore } from 'pinia'
-import { useRoute, useRouter } from 'vue-router'
+import { getCollectedCompanies, getCollectedJobsForCompany } from '@/api/backend'
+import type { CompanyBrief, JobBrief } from '@/api/types'
 
-type Company = { company_code: string; label: string }
-type Job     = { job_code: string; label: string }
-
-const LS_KEY = 'catalog.selected' // {company_code, company_label, job_code, job_label}
+const LS_COMPANY = 'selectedCompanyCode'
+const LS_JOB = 'selectedJobCode'
 
 export const useCatalogStore = defineStore('catalog', {
   state: () => ({
-    selectedCompany: null as Company | null,
-    selectedJob: null as Job | null,
+    companies: [] as CompanyBrief[],
+    jobs: [] as JobBrief[],
+    selectedCompany: null as CompanyBrief | null,
+    selectedJob: null as JobBrief | null,
+    loadingCompanies: false,
+    loadingJobs: false,
+    errorCompanies: '',
+    errorJobs: ''
   }),
+  // 회사/직무 라벨: company_name / job_name → name → code 순으로 폴백
   getters: {
-    companyCode: (s) => s.selectedCompany?.company_code || '',
-    jobCode: (s) => s.selectedJob?.job_code || '',
-    companyLabel: (s) => s.selectedCompany?.label || '',
-    jobLabel: (s) => s.selectedJob?.label || '',
-    canRun(): boolean { return !!(this.companyCode && this.jobCode) },
+   ready: (s) => !!(s.selectedCompany && s.selectedJob),
+   companyLabel: (s) =>
+     s.selectedCompany?.company_name ??
+     (s.selectedCompany as any)?.name ??
+     s.selectedCompany?.company_code ??
+     '',
+   jobLabel: (s) =>
+     s.selectedJob?.job_name ??
+     (s.selectedJob as any)?.name ??
+     s.selectedJob?.job_code ??
+     '',
+   companiesForSelect: (s) =>
+     s.companies.map((c) => ({
+       value: c.company_code,
+       label: (c as any).company_name ?? (c as any).name ?? c.company_code,
+     })),
+   jobsForSelect: (s) =>
+     s.jobs.map((j) => ({
+       value: j.job_code,
+       label: (j as any).job_name ?? (j as any).name ?? j.job_code,
+     })),
   },
   actions: {
-    setSelection(c: Company | null, j: Job | null) {
+    async loadCompanies() {
+      this.loadingCompanies = true
+      this.errorCompanies = ''
+      try {
+        const list = await getCollectedCompanies()
+        this.companies = list
+        if (!list.length) this.errorCompanies = '수집된 회사가 없습니다.'
+      } catch (e: any) {
+        this.errorCompanies = e?.message || '회사 목록을 불러오지 못했습니다.'
+      } finally {
+        this.loadingCompanies = false
+      }
+    },
+    async loadJobs(company_code?: string) {
+      this.loadingJobs = true
+      this.errorJobs = ''
+      try {
+        const list = await getCollectedJobsForCompany(company_code)
+        this.jobs = list
+        if (!list.length) this.errorJobs = '해당 회사의 직무가 없습니다.'
+      } catch (e: any) {
+        this.errorJobs = e?.message || '직무 목록을 불러오지 못했습니다.'
+      } finally {
+        this.loadingJobs = false
+      }
+    },
+
+    chooseCompany(c: CompanyBrief | null) {
       this.selectedCompany = c
+      this.selectedJob = null
+      this.jobs = []
+      if (c?.company_code) localStorage.setItem(LS_COMPANY, c.company_code)
+      else localStorage.removeItem(LS_COMPANY)
+      if (c?.company_code) this.loadJobs(c.company_code)
+    },
+    chooseJob(j: JobBrief | null) {
       this.selectedJob = j
-      // persist
-      const payload = c && j ? {
-        company_code: c.company_code, company_label: c.label,
-        job_code: j.job_code, job_label: j.label
-      } : null
-      if (payload) localStorage.setItem(LS_KEY, JSON.stringify(payload))
-      else localStorage.removeItem(LS_KEY)
+      if (j?.job_code) localStorage.setItem(LS_JOB, j.job_code)
+      else localStorage.removeItem(LS_JOB)
     },
 
-    /** 쿼리/로컬스토리지에서 복원 */
-    async initFromCodes(qCompany?: string, qJob?: string) {
-      const route = useRoute()
-      const router = useRouter()
+    async initFromCodes(company_code?: string, job_code?: string) {
+      const cc = company_code || localStorage.getItem(LS_COMPANY) || ''
+      const jc = job_code || localStorage.getItem(LS_JOB) || ''
 
-      // 1) 라우터 쿼리 우선
-      const cc = (qCompany ?? (route.query.company_code as string)) || ''
-      const jc = (qJob ?? (route.query.job_code as string)) || ''
-
-      if (cc && jc) {
-        // 라벨은 백엔드에서 불러올 수 있으면 좋지만, 우선 코드=라벨로 폴백
-        this.setSelection(
-          { company_code: cc, label: this.selectedCompany?.label || cc },
-          { job_code: jc,     label: this.selectedJob?.label || jc },
-        )
-        // 쿼리 정합성 보장(없으면 푸시)
-        if (!route.query.company_code || !route.query.job_code) {
-          router.replace({ query: { ...route.query, company_code: cc, job_code: jc } })
-        }
-        return
+      if (!this.companies.length && !this.loadingCompanies) {
+        await this.loadCompanies()
       }
+     // 회사 선택
+     const foundC = (cc && this.companies.find(c => c.company_code === cc)) || null
+     this.selectedCompany = foundC
+     this.selectedJob = null
+     this.jobs = []
 
-      // 2) 로컬스토리지
-      const raw = localStorage.getItem(LS_KEY)
-      if (raw) {
-        try {
-          const saved = JSON.parse(raw)
-          if (saved?.company_code && saved?.job_code) {
-            this.setSelection(
-              { company_code: saved.company_code, label: saved.company_label || saved.company_code },
-              { job_code: saved.job_code,         label: saved.job_label || saved.job_code },
-            )
-            // 쿼리에도 반영
-            const nq = { ...route.query, company_code: saved.company_code, job_code: saved.job_code }
-            router.replace({ query: nq })
-            return
-          }
-        } catch {}
-      }
+      // 직무 로딩 후 선택
+     if (this.selectedCompany?.company_code) {
+       await this.loadJobs(this.selectedCompany.company_code)
+       const foundJ = (jc && this.jobs.find(j => j.job_code === jc)) || null
+       this.selectedJob = foundJ
+     }
 
-      // 3) 아무 것도 없으면 초기화
-      this.setSelection(null, null)
+
+
+      if (this.selectedCompany?.company_code) localStorage.setItem(LS_COMPANY, this.selectedCompany.company_code)
+      if (this.selectedJob?.job_code) localStorage.setItem(LS_JOB, this.selectedJob.job_code)
     },
-  },
+
+    async ensureLoaded() {
+      if (!this.companies.length && !this.loadingCompanies) await this.loadCompanies()
+      if (this.selectedCompany && !this.jobs.length && !this.loadingJobs) {
+        await this.loadJobs(this.selectedCompany.company_code)
+      }
+    }
+  }
 })

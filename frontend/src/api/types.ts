@@ -7,3 +7,15 @@ export interface JDTemplate {
   source: 'db' | 'generated' | 'preset';
   style_label?: string;       // (선택) 스타일 라벨
 }
+
+export type CompanyBrief = {
+  company_code: string
+  name: string
+  job_count?: number
+}
+
+export type JobBrief = {
+  job_code: string
+  name: string
+  posting_count?: number
+}
