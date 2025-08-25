@@ -19,7 +19,9 @@
 
 **! .env의 OPENAI_API_KEY에 api key를 반드시 등록해주세요** 
 
+
 ### Frontend
+(현재 버그가 있어 수정이 필요한 상황입니다. 백엔드는 정상적으로 작동합니다. 패키징 에러로 당일 저녁에 수정해서 다시 올리겠습니다.)
 1. macOS/Linux nvm: Node LTS 설치 (권장: 20.x 또는 22.x)\
    (이미 설치 되어있다면 넘어가셔도 됩니다.)
 > curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
@@ -27,21 +29,35 @@
 2. 모듈 설치 (새로운 터미널에서 실행)
 > nvm install --lts \
 > nvm use --lts \
-> npm install -D tailwindcss postcss autoprefixer \
-> npx tailwindcss init -p \
-> cd frontend \
+
+# 프로젝트 초기화 (이미 있다면 생략)
+npm init -y
+
+# 런타임 의존성
+npm i vue@3.5.19 vue-router@4.4.5 pinia@2.3.1
+
+# 개발 의존성
+npm i -D vite@5.4.10 @vitejs/plugin-vue@5.1.4 typescript@5.5.4
+npm i -D tailwindcss@3.4.14 postcss@8.4.41 autoprefixer@10.4.20
+# 두 파일 자동 생성 (이미 있으면 건너뛰어도 됨)
+npx tailwindcss init -p
+
+> 
+> 
+> > cd frontend \
 > npm install
 
 # 실행 방법 
 1. backend 실행
 > cd {project root} \
 > chmod +x scripts/run_backend.sh \
-> chmod +x scripts/run_frontend.sh \
 > scripts/run_backend.sh start
 
 2. frontend 실행
 > cd {project root} \
-> ./scripts/run_frontend.sh start
+> cd frontend \
+> npm install \
+> npm run dev
 
 3. 브라우저 실행
 > http://localhost:5173
@@ -70,7 +86,7 @@
 3. 직무 추가하기
    - 잡코리아 웹에 표시되는 회사 및 직무명의 코드를 기입할 경우, 새로운 직무에 대한 JD를 생성할 수 있습니다.
 
-4. 주의사항 \
+4. 주의사항
    - PoC용 앱으로 LLM을 활용하여 빠르게 frontend 코드를 구현하여, 안정성이 떨어질 수 있습니다. \
    페이지 로드가 안된다면 새로 고침을 누르거나 재접속해주시면 감사하겠습니다.
    - 직무 추가하기의 경우 PoC용으로 잡코리아 backend를 모방하기 위해 임시로 구현하였습니다. \

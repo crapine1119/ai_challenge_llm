@@ -1,0 +1,429 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="SELECTIVE" />
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="40415de6-377b-4500-9a85-f2bd2e4aab2d" name="Changes" comment="hotfix: packaging error for vue js">
+      <change afterPath="$PROJECT_DIR$/frontend/src/api/types.ts" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/frontend/src/assets/index.css" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/frontend/src/components/common/AppModal.vue" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/frontend/src/composables/useNotifications.ts" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/frontend/src/pages/CrawlAdd.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/postcss.config.cjs" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/postcss.config.cjs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/src/api/backend.ts" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/api/backend.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/src/components/analysis/BatchGeneratePanel.vue" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/components/analysis/BatchGeneratePanel.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/src/pages/Collect.vue" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/pages/Collect.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/src/pages/Home.vue" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/src/router/index.ts" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/router/index.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/src/router/routes.ts" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/router/routes.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/tailwind.config.cjs" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/tailwind.config.cjs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/run_frontend.sh" beforeDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="ChangesViewManager">
+    <option name="groupingKeys">
+      <option value="directory" />
+    </option>
+  </component>
+  <component name="FileTemplateManagerImpl">
+    <option name="RECENT_TEMPLATES">
+      <list>
+        <option value="Python Script" />
+      </list>
+    </option>
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="GitHubPullRequestSearchHistory">{
+  &quot;lastFilter&quot;: {
+    &quot;state&quot;: &quot;OPEN&quot;,
+    &quot;assignee&quot;: &quot;crapine1119&quot;
+  }
+}</component>
+  <component name="GithubPullRequestsUISettings"><![CDATA[{
+  "selectedUrlAndAccountId": {
+    "url": "https://github.com/crapine1119/ai_challenge_llm.git",
+    "accountId": "f4b5eaf6-0ec9-40aa-a872-5bb7ddc2548c"
+  }
+}]]></component>
+  <component name="HighlightingSettingsPerFile">
+    <setting file="file://$PROJECT_DIR$/.venv/lib/python3.12/site-packages/bs4/__init__.py" root0="SKIP_INSPECTION" />
+  </component>
+  <component name="OptimizeOnSaveOptions">
+    <option name="myRunOnSave" value="true" />
+  </component>
+  <component name="ProblemsViewState">
+    <option name="selectedTabId" value="CurrentFile" />
+  </component>
+  <component name="ProjectColorInfo">{
+  &quot;associatedIndex&quot;: 2
+}</component>
+  <component name="ProjectId" id="315rvoHUKWyni0FjUrBcpsxOKqe" />
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;Python.company_analysis.executor&quot;: &quot;Debug&quot;,
+    &quot;Python.crawl_data.executor&quot;: &quot;Debug&quot;,
+    &quot;Python.crawl_jd_list.executor&quot;: &quot;Debug&quot;,
+    &quot;Python.crawl_jd_text.executor&quot;: &quot;Run&quot;,
+    &quot;Python.crawler.executor&quot;: &quot;Debug&quot;,
+    &quot;Python.guardrail.executor&quot;: &quot;Debug&quot;,
+    &quot;Python.main.executor&quot;: &quot;Debug&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;main&quot;,
+    &quot;last_opened_file_path&quot;: &quot;/Users/songhak/workspace/ai_challenge_llm/frontend/src/pages&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;preferences.pluginManager&quot;
+  }
+}</component>
+  <component name="RecentsManager">
+    <key name="CopyFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/frontend/src/pages" />
+      <recent name="$PROJECT_DIR$/frontend/src" />
+      <recent name="$PROJECT_DIR$" />
+      <recent name="$PROJECT_DIR$/backend/src/infrastructure/queue" />
+      <recent name="$PROJECT_DIR$/backend/src/infrastructure/metrics" />
+    </key>
+    <key name="MoveFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/backend/postgres/data" />
+      <recent name="$PROJECT_DIR$/frontend/src/components/generation" />
+      <recent name="$PROJECT_DIR$/frontend/src/components/common" />
+      <recent name="$PROJECT_DIR$/backend/src/api" />
+      <recent name="$PROJECT_DIR$/backend/src/prompts/ko" />
+    </key>
+  </component>
+  <component name="RunManager" selected="Python.main">
+    <configuration name="company_analysis" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="ai_challenge_llm" />
+      <option name="ENV_FILES" value="" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/backend/src/service" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/backend/src/service/company_analysis.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <configuration name="crawl_jd_list" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="ai_challenge_llm" />
+      <option name="ENV_FILES" value="" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/backend/data" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/backend/data/crawl_jd_list.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <configuration name="crawler" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="ai_challenge_llm" />
+      <option name="ENV_FILES" value="" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/backend/src/infrastructure" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/backend/src/infrastructure/crawler.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <configuration name="guardrail" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="ai_challenge_llm" />
+      <option name="ENV_FILES" value="" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/backend/src/service" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/backend/src/service/guardrail.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <configuration name="main" type="PythonConfigurationType" factoryName="Python" temporary="true">
+      <module name="ai_challenge_llm" />
+      <option name="ENV_FILES" value="$PROJECT_DIR$/backend/.env" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/backend" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="SCRIPT_NAME" value="uvicorn" />
+      <option name="PARAMETERS" value="main:app --host 0.0.0.0 --port 8000 --reload" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="true" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <list>
+      <item itemvalue="Python.company_analysis" />
+      <item itemvalue="Python.crawl_jd_list" />
+      <item itemvalue="Python.crawler" />
+      <item itemvalue="Python.guardrail" />
+      <item itemvalue="Python.main" />
+    </list>
+    <recent_temporary>
+      <list>
+        <item itemvalue="Python.main" />
+        <item itemvalue="Python.guardrail" />
+        <item itemvalue="Python.company_analysis" />
+        <item itemvalue="Python.crawler" />
+        <item itemvalue="Python.crawl_jd_list" />
+      </list>
+    </recent_temporary>
+  </component>
+  <component name="SharedIndexes">
+    <attachedChunks>
+      <set>
+        <option value="bundled-python-sdk-fb887030ada0-aa17d162503b-com.jetbrains.pycharm.community.sharedIndexes.bundled-PC-243.21565.199" />
+      </set>
+    </attachedChunks>
+  </component>
+  <component name="SpellCheckerSettings" RuntimeDictionaries="0" Folders="0" CustomDictionaries="0" DefaultDictionary="application-level" UseSingleDictionary="true" transferred="true" />
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="40415de6-377b-4500-9a85-f2bd2e4aab2d" name="Changes" comment="" />
+      <created>1754825007299</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1754825007299</updated>
+    </task>
+    <task id="LOCAL-00001" summary="feat(add): README sketch">
+      <option name="closed" value="true" />
+      <created>1754830512258</created>
+      <option name="number" value="00001" />
+      <option name="presentableId" value="LOCAL-00001" />
+      <option name="project" value="LOCAL" />
+      <updated>1754830512258</updated>
+    </task>
+    <task id="LOCAL-00002" summary="feat: ideation for llm service (in progress)">
+      <option name="closed" value="true" />
+      <created>1755005298868</created>
+      <option name="number" value="00002" />
+      <option name="presentableId" value="LOCAL-00002" />
+      <option name="project" value="LOCAL" />
+      <updated>1755005298868</updated>
+    </task>
+    <task id="LOCAL-00003" summary="feat: ideation for llm service and make structure for services">
+      <option name="closed" value="true" />
+      <created>1755151778002</created>
+      <option name="number" value="00003" />
+      <option name="presentableId" value="LOCAL-00003" />
+      <option name="project" value="LOCAL" />
+      <updated>1755151778002</updated>
+    </task>
+    <task id="LOCAL-00004" summary="feat(add): data collection workflow (in progress)">
+      <option name="closed" value="true" />
+      <created>1755439498634</created>
+      <option name="number" value="00004" />
+      <option name="presentableId" value="LOCAL-00004" />
+      <option name="project" value="LOCAL" />
+      <updated>1755439498634</updated>
+    </task>
+    <task id="LOCAL-00005" summary="feat(add): crawl service to reproduce JobKorea api">
+      <option name="closed" value="true" />
+      <created>1755615979932</created>
+      <option name="number" value="00005" />
+      <option name="presentableId" value="LOCAL-00005" />
+      <option name="project" value="LOCAL" />
+      <updated>1755615979932</updated>
+    </task>
+    <task id="LOCAL-00006" summary="feat(add): infra/service skeletons">
+      <option name="closed" value="true" />
+      <created>1755701721918</created>
+      <option name="number" value="00006" />
+      <option name="presentableId" value="LOCAL-00006" />
+      <option name="project" value="LOCAL" />
+      <updated>1755701721918</updated>
+    </task>
+    <task id="LOCAL-00007" summary="feat(add): company analysis service">
+      <option name="closed" value="true" />
+      <created>1755937630809</created>
+      <option name="number" value="00007" />
+      <option name="presentableId" value="LOCAL-00007" />
+      <option name="project" value="LOCAL" />
+      <updated>1755937630809</updated>
+    </task>
+    <task id="LOCAL-00008" summary="feat(add): jd generation &amp; queue simulation service">
+      <option name="closed" value="true" />
+      <created>1756023542438</created>
+      <option name="number" value="00008" />
+      <option name="presentableId" value="LOCAL-00008" />
+      <option name="project" value="LOCAL" />
+      <updated>1756023542438</updated>
+    </task>
+    <task id="LOCAL-00009" summary="fix: jd generation &amp; queue simulation service to stream">
+      <option name="closed" value="true" />
+      <created>1756033032780</created>
+      <option name="number" value="00009" />
+      <option name="presentableId" value="LOCAL-00009" />
+      <option name="project" value="LOCAL" />
+      <updated>1756033032780</updated>
+    </task>
+    <task id="LOCAL-00010" summary="feat(add): jd generation &amp; queue simulation service to stream">
+      <option name="closed" value="true" />
+      <created>1756034652220</created>
+      <option name="number" value="00010" />
+      <option name="presentableId" value="LOCAL-00010" />
+      <option name="project" value="LOCAL" />
+      <updated>1756034652220</updated>
+    </task>
+    <task id="LOCAL-00011" summary="feat(add): frontend skeleton from Design">
+      <option name="closed" value="true" />
+      <created>1756037916630</created>
+      <option name="number" value="00011" />
+      <option name="presentableId" value="LOCAL-00011" />
+      <option name="project" value="LOCAL" />
+      <updated>1756037916630</updated>
+    </task>
+    <task id="LOCAL-00012" summary="feat(add): markdown and base frontend">
+      <option name="closed" value="true" />
+      <created>1756046047003</created>
+      <option name="number" value="00012" />
+      <option name="presentableId" value="LOCAL-00012" />
+      <option name="project" value="LOCAL" />
+      <updated>1756046047003</updated>
+    </task>
+    <task id="LOCAL-00013" summary="feat(add): updated markdown">
+      <option name="closed" value="true" />
+      <created>1756046498489</created>
+      <option name="number" value="00013" />
+      <option name="presentableId" value="LOCAL-00013" />
+      <option name="project" value="LOCAL" />
+      <updated>1756046498489</updated>
+    </task>
+    <task id="LOCAL-00014" summary="feat(add): update missing files">
+      <option name="closed" value="true" />
+      <created>1756066150380</created>
+      <option name="number" value="00014" />
+      <option name="presentableId" value="LOCAL-00014" />
+      <option name="project" value="LOCAL" />
+      <updated>1756066150380</updated>
+    </task>
+    <task id="LOCAL-00015" summary="feat(add): update missing files (2)">
+      <option name="closed" value="true" />
+      <created>1756066248292</created>
+      <option name="number" value="00015" />
+      <option name="presentableId" value="LOCAL-00015" />
+      <option name="project" value="LOCAL" />
+      <updated>1756066248292</updated>
+    </task>
+    <task id="LOCAL-00016" summary="feat(add): update missing scripts">
+      <option name="closed" value="true" />
+      <created>1756066901882</created>
+      <option name="number" value="00016" />
+      <option name="presentableId" value="LOCAL-00016" />
+      <option name="project" value="LOCAL" />
+      <updated>1756066901882</updated>
+    </task>
+    <option name="localTasksCounter" value="17" />
+    <servers />
+  </component>
+  <component name="UnknownFeatures">
+    <option featureType="com.intellij.fileTypeFactory" implementationName="*.ts" />
+  </component>
+  <component name="Vcs.Log.Tabs.Properties">
+    <option name="TAB_STATES">
+      <map>
+        <entry key="MAIN">
+          <value>
+            <State />
+          </value>
+        </entry>
+      </map>
+    </option>
+  </component>
+  <component name="VcsManagerConfiguration">
+    <MESSAGE value="feat(add): README sketch" />
+    <MESSAGE value="feat: ideation for llm service (in progress)" />
+    <MESSAGE value="feat: ideation for llm service and make structure for services" />
+    <MESSAGE value="feat(add): data collection workflow (in progress)" />
+    <MESSAGE value="feat(add): crawl service to reproduce JobKorea api" />
+    <MESSAGE value="feat(add): infra/service skeletons" />
+    <MESSAGE value="feat(add): company analysis service" />
+    <MESSAGE value="feat(add): jd generation &amp; queue simulation service" />
+    <MESSAGE value="fix: jd generation &amp; queue simulation service to stream" />
+    <MESSAGE value="feat(add): jd generation &amp; queue simulation service to stream" />
+    <MESSAGE value="feat(add): frontend skeleton from Design" />
+    <MESSAGE value="feat(add): markdown and base frontend" />
+    <MESSAGE value="feat(add): updated markdown" />
+    <MESSAGE value="feat(add): update missing files" />
+    <MESSAGE value="feat(add): update missing files (2)" />
+    <MESSAGE value="feat(add): update missing scripts" />
+    <option name="LAST_COMMIT_MESSAGE" value="feat(add): update missing scripts" />
+  </component>
+  <component name="XDebuggerManager">
+    <breakpoint-manager>
+      <breakpoints>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/backend/src/service/guardrail.py</url>
+          <line>8</line>
+          <option name="timeStamp" value="118" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/backend/src/api/routes/styles.py</url>
+          <line>137</line>
+          <option name="timeStamp" value="136" />
+        </line-breakpoint>
+      </breakpoints>
+    </breakpoint-manager>
+  </component>
+</project>

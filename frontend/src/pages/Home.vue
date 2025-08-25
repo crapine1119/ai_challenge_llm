@@ -17,7 +17,7 @@
 
       <!-- 2. 실시간 JD 생성하기 -->
       <router-link :to="{ name: 'generate-realtime' }" class="block rounded-lg border bg-white p-4 hover:bg-gray-50">
-        <h3 class="text-lg font-semibold">2. 실시간 JD 생성하기</h3>
+        <h3 class="text-lg font-semibold">실시간 JD 생성하기</h3>
         <p class="mt-2 text-sm text-gray-600">
           사전에 생성된 JD를 스트리밍 연출로 보여주어 실시간처럼 느끼게 합니다.
         </p>
@@ -31,10 +31,9 @@
 
       <!-- 3. 직무 추가하기 -->
       <router-link :to="{ name: 'collect' }" class="block rounded-lg border bg-white p-4 hover:bg-gray-50">
-        <h3 class="text-lg font-semibold">3. 직무 추가하기</h3>
+        <h3 class="text-lg font-semibold">직무 추가하기</h3>
         <p class="mt-2 text-sm text-gray-600">
-          - 기본 제공되는 회사/직무 외에 다른 데이터로 테스트하고 싶은 경우.<br>
-          - Job Korea의 회사/직무 코드로 데이터를 수집해 DB에 반영합니다.
+          회사/직무 코드로 데이터를 수집해 DB에 반영합니다.
         </p>
         <div class="mt-4">
           <span class="inline-block rounded border px-3 py-2 text-sm">직무 추가</span>

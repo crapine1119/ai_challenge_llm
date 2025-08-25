@@ -380,8 +380,8 @@ export const collectJobkorea = async (payload: {
 }) => {
   const body = {
     company_code: 'jobkorea', // 고정
-    max_details: 3,
-    ...payload
+    ...payload,
+    max_details: 3 as const,
   }
   const r = await http.post('/api/collect/jobkorea', body)
   return r.data

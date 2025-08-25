@@ -30,11 +30,7 @@
           <label class="mb-1 block text-xs text-gray-500">직무 코드 (job_code)</label>
           <input v-model.trim="form.job_code" class="w-full rounded border px-3 py-2 text-sm" placeholder="예: 1000242" />
         </div>
-        <div class="md:col-span-1">
-          <label class="mb-1 block text-xs text-gray-500">상세 최대 수집 수 (PoC 3으로 고정)</label>
-          <input v-model.number="form.max_details" type="number" min="3" max="3" class="w-full rounded border px-3 py-2 text-sm" />
-        </div>
-
+        <!-- max_details 고정: 입력칸 제거 -->
         <div class="md:col-span-4 flex items-center gap-2">
           <AppButton :disabled="!canSubmit || loading" type="submit">
             {{ loading ? '수집 중...' : '수집 시작' }}
@@ -128,7 +124,6 @@ import type { CompanyBrief, JobBrief } from '@/api/types'
 const form = ref<{ company_id: number | null; job_code: string }>({
   company_id: null,
   job_code: '',
-  max_details: 3
 })
 const loading = ref(false)
 const error = ref<string | null>(null)
@@ -146,9 +141,9 @@ async function onSubmit() {
     const body = {
       company_id: Number(form.value.company_id),
       job_code: form.value.job_code.trim(),
-      max_details: Number(form.value.max_details),
-      company_code: 'jobkorea'
+      company_code: 'jobkorea',
     }
+    ;(body as any).max_details = 3
     logs.value.push(`▶ 요청: ${JSON.stringify(body, null, 2)}`)
     const res = await collectJobkorea(body)
     logs.value.push(`✔ 응답: ${JSON.stringify(res, null, 2)}`)

@@ -30,14 +30,24 @@
 </template>
 
 <script setup lang="ts">
-defineProps<{
+import { computed } from 'vue'
+
+const props = defineProps<{
   disabled?: boolean
   running: boolean
   status: 'idle' | 'running' | 'done' | 'error'
   logs: string[]
   results: { label: string; markdown: string; saved_id?: number }[]
 }>()
+
 defineEmits<{ (e: 'run'): void }>()
-const statusTextMap = { idle: '대기', running: '실행 중', done: '완료', error: '오류' }
-const statusText = computed(() => statusTextMap[(defineProps as any).status])
+
+const statusText = computed(() => {
+  switch (props.status) {
+    case 'running': return '실행 중'
+    case 'done': return '완료'
+    case 'error': return '오류'
+    default: return '대기'
+  }
+})
 </script>
