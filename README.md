@@ -29,34 +29,15 @@
 2. 모듈 설치 (새로운 터미널에서 실행)
 > nvm install --lts \
 > nvm use --lts \
-
-# 프로젝트 초기화 (이미 있다면 생략)
-npm init -y
-
-# 런타임 의존성
-npm i vue@3.5.19 vue-router@4.4.5 pinia@2.3.1
-
-# 개발 의존성
-npm i -D vite@5.4.10 @vitejs/plugin-vue@5.1.4 typescript@5.5.4
-npm i -D tailwindcss@3.4.14 postcss@8.4.41 autoprefixer@10.4.20
-# 두 파일 자동 생성 (이미 있으면 건너뛰어도 됨)
-npx tailwindcss init -p
-
-> 
-> 
-> > cd frontend \
 > npm install
 
 # 실행 방법 
 1. backend 실행
 > cd {project root} \
-> chmod +x scripts/run_backend.sh \
 > scripts/run_backend.sh start
 
 2. frontend 실행
-> cd {project root} \
-> cd frontend \
-> npm install \
+> cd {project root}/frontend \
 > npm run dev
 
 3. 브라우저 실행
