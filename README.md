@@ -33,6 +33,7 @@
 # 실행 방법 
 1. backend 실행
 > cd {project root} \
+> chmod +x scripts/run_backend.sh \
 > scripts/run_backend.sh start
 
 2. frontend 실행
