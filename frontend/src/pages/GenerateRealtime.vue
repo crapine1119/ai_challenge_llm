@@ -3,7 +3,7 @@
     <!-- 상단: 현재 선택 요약 + 액션 -->
     <div class="space-y-6">
       <div class="flex items-start justify-between">
-        <h1 class="text-2xl font-semibold">실시간 JD 생성 (비어있는 경우 직무 변경 선택)</h1>
+        <h1 class="text-2xl font-semibold">실시간 JD 생성</h1>
         <AppButton size="sm" :disabled="!canStart || running" @click="startNow">
           생성
         </AppButton>

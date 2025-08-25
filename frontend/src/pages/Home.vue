@@ -1,6 +1,11 @@
 <template>
   <section class="space-y-8">
     <!-- 홈 카드 3종: 분석 / 실시간 생성 / 크롤링 -->
+    <p class="mt-2 text-xs text-red-500">
+          회사·직무는 우측 상단 <b>“직무 변경”</b>에서 변경 가능합니다.
+      </p>
+
+
     <div class="grid gap-6 md:grid-cols-3">
       <!-- 1. 직무 분석하기 -->
       <router-link :to="{ name: 'dashboard' }" class="block rounded-lg border bg-white p-4 hover:bg-gray-50">
@@ -17,23 +22,23 @@
 
       <!-- 2. 실시간 JD 생성하기 -->
       <router-link :to="{ name: 'generate-realtime' }" class="block rounded-lg border bg-white p-4 hover:bg-gray-50">
-        <h3 class="text-lg font-semibold">실시간 JD 생성하기</h3>
+        <h3 class="text-lg font-semibold">2. 실시간 JD 생성하기</h3>
         <p class="mt-2 text-sm text-gray-600">
-          사전에 생성된 JD를 스트리밍 연출로 보여주어 실시간처럼 느끼게 합니다.
+          - 사전에 생성된 JD를 스트리밍 연출로 보여주어 실시간처럼 느끼게 합니다. <br>
+          - [TODO] 추출한 JD의 경우 Dictionary로 관리하여, 사용자 입력을 받아 수정하는 기능을 제공할 수 있습니다.
         </p>
         <div class="mt-4">
           <span class="inline-block rounded border px-3 py-2 text-sm">지금 생성</span>
         </div>
-        <p class="mt-2 text-xs text-gray-500">
-          회사·직무는 우측 상단 <b>“직무 변경”</b>에서 선택합니다.
-        </p>
       </router-link>
 
-      <!-- 3. 직무 추가하기 -->
+      <!-- 3. 직무 등록하기 -->
       <router-link :to="{ name: 'collect' }" class="block rounded-lg border bg-white p-4 hover:bg-gray-50">
-        <h3 class="text-lg font-semibold">직무 추가하기</h3>
+        <h3 class="text-lg font-semibold">3. 직무 등록하기</h3>
         <p class="mt-2 text-sm text-gray-600">
-          회사/직무 코드로 데이터를 수집해 DB에 반영합니다.
+          - 회사/직무 코드로 데이터를 수집해 DB에 반영합니다 (잡코리아 DB 대신 활용). <br>
+          - 사전 데이터에 포함되지 않는 회사 / 직무의 정보를 추가합니다. <br>
+          - 현재 등록된 정보를 보여줍니다.
         </p>
         <div class="mt-4">
           <span class="inline-block rounded border px-3 py-2 text-sm">직무 추가</span>

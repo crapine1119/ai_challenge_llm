@@ -5,7 +5,7 @@ export const routes: RouteRecordRaw[] = [
   { path: '/', name: 'home', component: () => import('@/pages/Home.vue') },
   { path: '/generate/realtime', name: 'generate-realtime', component: () => import('@/pages/GenerateRealtime.vue') },
   { path: '/generate/wait', name: 'wait-hub', component: () => import('@/pages/WaitHub.vue') },
-  { path: '/generate/board', name: 'board', component: () => import('@/pages/Board.vue') },
+  { path: '/generate/board', redirect: '/404' },
   { path: '/collect', name: 'collect', component: () => import('@/pages/CrawlAdd.vue') },
   { path: '/analyze', name: 'dashboard', component: () => import('@/pages/AnalyzeJob.vue') },
   { path: '/:pathMatch(.*)*', name: 'not-found', component: () => import('@/pages/NotFound.vue') },
