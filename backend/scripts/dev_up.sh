@@ -59,6 +59,28 @@ ensure_prereq() {
   fi
 }
 
+# 빈 포트 찾기 (49152~65535에서 검색)
+pick_free_port() {
+  local port
+  for port in $(seq 55000 65535); do
+    if ! lsof -i :"$port" >/dev/null 2>&1; then
+      echo "$port"; return 0
+    fi
+  done
+  return 1
+}
+
+ensure_host_port() {
+  if [ -z "${PGPORT:-}" ] || [ "${PGPORT}" = "auto" ]; then
+    local free
+    free="$(pick_free_port)" || { log "❌ 사용 가능한 포트를 찾지 못했습니다"; exit 1; }
+    export PGPORT="$free"
+    log "🔌 호스트 DB 포트 자동 선택: ${PGPORT}"
+  else
+    log "🔌 호스트 DB 포트 지정됨: ${PGPORT}"
+  fi
+}
+
 compose_up_db() {
   log "🐘 PostgreSQL 컨테이너 시작 (${service_name})"
   docker compose up -d "${service_name}"
@@ -66,10 +88,9 @@ compose_up_db() {
 
 wait_for_db() {
   log "⏳ DB 준비 대기..."
-  for _ in {1..30}; do
-    if docker compose exec -T "${service_name}" bash -lc \
-      'pg_isready -h 127.0.0.1 -p 5432 -U "${POSTGRES_USER:-postgres}" -d "${POSTGRES_DB:-postgres}" >/dev/null 2>&1'
-    then
+  for _ in {1..60}; do
+    if docker compose exec -T "${service_name}" env -u PGPORT -u PGHOST bash -lc \
+      'pg_isready -h 127.0.0.1 -p 5432 -U "${POSTGRES_USER:-postgres}" -d postgres' >/dev/null 2>&1; then
       log "✅ DB ready"
       return 0
     fi
@@ -77,6 +98,62 @@ wait_for_db() {
   done
   log "❌ DB 연결 실패 (타임아웃)"
   exit 1
+}
+
+
+# 컨테이너 내부에 PGDATABASE가 없으면 생성
+ensure_db_exists_in_container() {
+  log "🔍 DB 존재 보장 (컨테이너 내 PGDATABASE 기준)"
+  docker compose exec -T "${service_name}" env -u PGPORT -u PGHOST bash -lc '
+    set -euo pipefail
+    DB="${PGDATABASE:-${POSTGRES_DB:-postgres}}"
+    USER="${POSTGRES_USER:-postgres}"
+    echo ">> PGDATABASE: $DB / POSTGRES_USER: $USER (PGPORT/PGHOST unset)"
+    if [ "$DB" = "postgres" ]; then
+      echo "base DB(postgres) 사용 → 생성 생략"; exit 0
+    fi
+    EXISTS="$(psql -h 127.0.0.1 -p 5432 -U "$USER" -d postgres -tc "SELECT 1 FROM pg_database WHERE datname='\''$DB'\''" | tr -d "[:space:]")"
+    if [ "$EXISTS" = "1" ]; then
+      echo "DB already exists: $DB"
+    else
+      echo "Creating DB: $DB"
+      psql -h 127.0.0.1 -p 5432 -U "$USER" -d postgres -v ON_ERROR_STOP=1 \
+        -c "CREATE DATABASE \"$DB\" TEMPLATE template0 ENCODING '\''UTF8'\'';"
+    fi
+  '
+}
+
+# 컨테이너 내부에 스키마(prompts)가 없으면 ./postgres/init/*.sql 적용
+ensure_schema_or_seed() {
+  log "🧱 스키마 보장(prompts 등)"
+  docker compose exec -T "${service_name}" env -u PGPORT -u PGHOST bash -lc '
+    set -euo pipefail
+    DB="${PGDATABASE:-${POSTGRES_DB:-postgres}}"
+    USER="${POSTGRES_USER:-postgres}"
+
+    echo ">> DB=$DB USER=$USER (PGPORT/PGHOST unset; using 127.0.0.1:5432)"
+    HAVE="$(psql -h 127.0.0.1 -p 5432 -U "$USER" -d "$DB" -tAc "SELECT to_regclass('\''public.prompts'\'') IS NOT NULL")"
+    if [ "$HAVE" = "t" ]; then
+      echo "✅ schema already exists → skip init SQL"
+      exit 0
+    fi
+
+    echo "⚙️  schema missing → apply /docker-entrypoint-initdb.d/*.sql"
+    shopt -s nullglob
+    FILES=(/docker-entrypoint-initdb.d/*.sql)
+    if [ ${#FILES[@]} -eq 0 ]; then
+      echo "❌ no *.sql in /docker-entrypoint-initdb.d — cannot create schema"
+      exit 1
+    fi
+    for f in "${FILES[@]}"; do
+      echo ">> applying: $f"
+      PGPASSWORD="${POSTGRES_PASSWORD:-postgres}" psql \
+        -h 127.0.0.1 -p 5432 \
+        -U "$USER" -d "$DB" \
+        -v ON_ERROR_STOP=1 -f "$f"
+    done
+    echo "✅ schema created"
+  '
 }
 
 ensure_uv_env() {
@@ -224,7 +301,7 @@ seed_db() {
       PGPASSWORD="${POSTGRES_PASSWORD:-postgres}" psql \
         -h 127.0.0.1 -p 5432 \
         -U "${POSTGRES_USER:-postgres}" \
-        -d "${POSTGRES_DB:-postgres}" \
+        -d "${PGDATABASE:-${POSTGRES_DB:-postgres}}" \
         -v ON_ERROR_STOP=1 \
         -f "$f"
     done
@@ -249,12 +326,18 @@ case "$cmd" in
   debug)
     compose_up_db
     wait_for_db
+    ensure_db_exists_in_container
     ensure_uv_env
     maybe_auto_sync_prompts
     ;;
   start)
+    log "♻️ 기존 컨테이너 종료 및 정리"
+    docker compose down || true
+    ensure_host_port
     compose_up_db
     wait_for_db
+    ensure_db_exists_in_container
+    ensure_schema_or_seed
     ensure_uv_env
     maybe_auto_sync_prompts   # ✅ 앱 시작 전 자동 동기화
     start_app
@@ -262,6 +345,7 @@ case "$cmd" in
   restart)
     compose_up_db
     wait_for_db
+    ensure_db_exists_in_container
     ensure_uv_env
     maybe_auto_sync_prompts   # ✅ 재시작 전 자동 동기화
     restart_app

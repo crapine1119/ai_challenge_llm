@@ -17,7 +17,9 @@
 > cd backend \
 > cp .env.example .env
 
-**! .env의 OPENAI_API_KEY에 api key를 반드시 등록해주세요** 
+**! .env의 OPENAI_API_KEY에 api key를 반드시 등록해주세요**
+
+**! PGPORT, PGDATABASE가 겹치지 않도록 주의해주세요!** 
 
 
 ### Frontend

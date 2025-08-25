@@ -5,14 +5,13 @@ services:
     image: postgres:16
     container_name: jd_postgres
     restart: unless-stopped
-    env_file:
-      - ./.env
     environment:
       POSTGRES_USER: ${PGUSER:-postgres}
       POSTGRES_PASSWORD: ${PGPASSWORD:-postgres}
       POSTGRES_DB: ${PGDATABASE:-jd}
+      PGDATABASE: ${PGDATABASE:-jd}
     ports:
-      - "5432:5432"
+      - "${PGPORT:-5432}:5432"
     volumes:
       - jd_postgres_data:/var/lib/postgresql/data
       - ./postgres/init:/docker-entrypoint-initdb.d  # 초기화 SQL
