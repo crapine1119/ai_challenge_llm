@@ -37,7 +37,6 @@
 
 <script setup lang="ts">
 import AppButton from '@/components/common/AppButton.vue'
-import { fmt } from '@/utils/time'
 import type { JDItem } from '@/api/types'
 
 defineProps<{ items: JDItem[]; loading?: boolean }>()

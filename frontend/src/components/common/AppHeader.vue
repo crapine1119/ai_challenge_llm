@@ -1,13 +1,13 @@
-                                                    <template>
+<template>
   <header class="border-b bg-white">
     <div class="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
       <router-link to="/" class="font-semibold">JD Generator</router-link>
 
       <nav class="flex items-center gap-4 text-sm">
+        <router-link to="/analyze">JD 분석</router-link>
+        <router-link to="/generate/realtime">실시간 생성</router-link>
         <router-link to="/collect">직무 추가</router-link>
-        <router-link to="/generate/board">게시판 (TODO)</router-link>
-        <router-link to="/generate/stats">통계 (TODO)</router-link>
-
+        <router-link to="/generate/board">갤러리 (TODO)</router-link>
         <!-- 우측: 직무 변경 버튼 -->
         <button
           class="ml-2 rounded-md border px-3 py-1.5 hover:bg-gray-50"

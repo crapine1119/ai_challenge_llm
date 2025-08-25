@@ -209,4 +209,4 @@ __marimo__/
 node_modules/
 .pids
 .DS_STORE
-.idea
+.idea/

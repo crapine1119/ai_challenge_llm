@@ -3,10 +3,12 @@ import { defineStore } from 'pinia'
 
 export const useUIStore = defineStore('ui', {
   state: () => ({
-    showJobModal: false
+    jobModalOpen: false,
+    bootChecked: false, // 첫 진입 점검 1회 플래그
   }),
   actions: {
-    openJobModal() { this.showJobModal = true },
-    closeJobModal() { this.showJobModal = false }
-  }
+    openJobModal() { this.jobModalOpen = true },
+    closeJobModal() { this.jobModalOpen = false },
+    setBootChecked(v: boolean) { this.bootChecked = v },
+  },
 })
