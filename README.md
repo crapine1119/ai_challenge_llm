@@ -14,7 +14,7 @@
 2. uv 설치
 > curl -LsSf https://astral.sh/uv/install.sh | sh
 3. env 설정
-> cd backend \
+> cd {project_root}/backend \
 > cp .env.example .env
 
 **! .env의 OPENAI_API_KEY에 api key를 반드시 등록해주세요**
@@ -23,7 +23,6 @@
 
 
 ### Frontend
-(현재 버그가 있어 수정이 필요한 상황입니다. 백엔드는 정상적으로 작동합니다. 패키징 에러로 당일 저녁에 수정해서 다시 올리겠습니다.)
 1. macOS/Linux nvm: Node LTS 설치 (권장: 20.x 또는 22.x)\
    (이미 설치 되어있다면 넘어가셔도 됩니다.)
 > curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
@@ -31,11 +30,13 @@
 2. 모듈 설치 (새로운 터미널에서 실행)
 > nvm install --lts \
 > nvm use --lts \
+> cd {project_root}/frontend \
 > npm install
 
 # 실행 방법 
 1. backend 실행
-> cd {project root} \
+> cd {project_root} \
+> chmod +x scripts/run_backend.sh \
 > scripts/run_backend.sh start
 
 2. frontend 실행
